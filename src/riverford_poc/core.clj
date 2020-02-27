@@ -9,6 +9,8 @@
 ;; Read in and validate recipes
 ;;
 
+(def recipe-dir-name "/Users/matt/Downloads/recipes/") ;; unzipped dir of recipes
+
 ;; https://clojuredocs.org/clojure.core/split-with#example-5e48288ce4b0ca44402ef839
 (defn split-by [pred coll]
   (lazy-seq
@@ -53,7 +55,7 @@
             (spec/explain ::recipe recipe))
         recipe))))
 
-(def recipe-dir (clojure.java.io/file "/Users/matt/Downloads/recipes/"))
+(def recipe-dir (clojure.java.io/file recipe-dir-name))
 (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
 (def recipes (map read-recipe recipe-files))
 
