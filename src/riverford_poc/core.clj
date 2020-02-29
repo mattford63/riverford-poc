@@ -11,19 +11,16 @@
 
 (def recipe-dir-name "/Users/matt/Downloads/recipes/") ;; unzipped dir of recipes
 
-;; https://clojuredocs.org/clojure.core/split-with#example-5e48288ce4b0ca44402ef839
-(defn split-by [pred coll]
+(defn split-by-short [pred coll]
+  "Splits a sequence by predicate but always splits on predicate success"
   (lazy-seq
-    (when-let [s (seq coll)]
-      (let [!pred (complement pred)
-            [xs ys] (split-with !pred s)]
-        (if (seq xs)
-          (cons xs (split-by pred ys))
-          (let [skip (take-while pred s)
-                others (drop-while pred s)
-                [xs ys] (split-with !pred others)]
-            (cons (concat skip xs)
-                  (split-by pred ys))))))))
+   (when-let [s (seq coll)]
+     (let [[x & xs] coll
+           !pred (complement pred)]
+       (let [skip (take-while !pred xs)
+             others (drop-while !pred xs)]
+         (cons (cons x skip)
+               (split-by-short pred others)))))))
 
 (defn keyword+ [s] (keyword (str *ns*) s))
 
@@ -33,27 +30,29 @@
       (clojure.string/replace ":" "")
       keyword+))
 
-(spec/def ::id string?)
+(spec/def ::file-name string?)
 (spec/def ::title string?)
 (spec/def ::introduction string?)
 (spec/def ::ingredients string?)
 (spec/def ::method string?)
-(spec/def ::recipe (spec/keys :req [::id ::title ::introduction ::ingredients ::method]))
+(spec/def ::recipe (spec/keys :req [::file-name ::title ::introduction ::ingredients ::method]))
 
-(defn recipe-to-map [recipe-seq]
-  (let [split-recipe (split-by #(case % ("Id:" "Title:" "Introduction:"
-                                         "Ingredients:" "Method:") true
-                                      false) recipe-seq)]
-    (into {} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join y)]) split-recipe))))
+
+(defn split-recipe [recipe-seq]
+  (split-by-short #(case % ("File-Name:" "Title:" "Introduction:"
+                            "Ingredients:" "Method:") true false) recipe-seq))
+
+(defn recipe-seq-to-map [recipe-seq]
+  (let [recipe-map (into {} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
+    (if (not (spec/valid? ::recipe recipe-map))
+      (do (spec/explain ::recipe recipe-map)
+          nil)
+      recipe-map)))
 
 (defn read-recipe [recipe-file]
   (with-open [rdr (clojure.java.io/reader recipe-file)]
-    (let [recipe-seq (concat [:id (fs/base-name recipe-file)] (conj (line-seq rdr) "Title:")) ;; add Title and Id to seq
-          recipe (recipe-to-map recipe-seq)]
-      (if (not (spec/valid? ::recipe recipe))
-        (do (prn (str "File: " recipe-file " INVALID!!"))
-            (spec/explain ::recipe recipe))
-        recipe))))
+    (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)] (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
+      (recipe-seq-to-map recipe-seq))))
 
 (def recipe-dir (clojure.java.io/file recipe-dir-name))
 (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
@@ -73,7 +72,7 @@
 
 (def analyzer (analysis/standard-analyzer))
 (def index-store (store/memory-store))
-(core/add! index-store recipes [::id ::title ::introduction ::ingredients ::method] analyzer)
+(core/add! index-store recipes [::file-name ::title ::introduction ::ingredients ::method] analyzer)
 
 ;; --------
 ;; Do some searches
