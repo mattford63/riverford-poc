@@ -3,7 +3,8 @@
             [me.raynes.fs :as fs]
             [clucie.core :as core]
             [clucie.store :as store]
-            [clucie.analysis :as analysis]))
+            [clucie.analysis :as analysis]
+            [cljcc]))
 
 ;; ---------
 ;; Read in and validate recipes
@@ -75,10 +76,35 @@
 (core/add! index-store recipes [::file-name ::title ::introduction ::ingredients ::method] analyzer)
 
 ;; --------
+;; Tokenizer
+;;
+
+(def tokens
+  #{{:name :word :pattern #"\w+" } ; match all strings
+    {:ignore true :pattern #"\W+" }}) ; ignore everything else
+
+(def lexical-tokenizer
+  "Tokenize a string"
+  (cljcc/make-lexer tokens))
+
+(defn linguistic-tokenizer [matched-tokens]
+  "This is where increased sophistication can come in but for now we
+  keep it very simple, ignoring position, lower-casing and returning
+  sorted map of frequency.
+
+  Sophisticated things are \"stem\" words, hyphenation, names, phrases etc."
+  (let [result (sorted-map)]
+    (reduce (fn [acc {:keys [consumed postition token-name]}]
+              (if (= token-name :word)
+                (update acc (clojure.string/lower-case consumed) (fnil inc 0))
+                acc)) result matched-tokens)))
+
+
+;; --------
 ;; Do some searches
 ;;
 
-(defn get-ids [s] (time (map ::id s))) ;; "Elapsed time: 0.001128 msecs"
+(defn get-ids [s] (time (map ::file-name s))) ;; "Elapsed time: 0.001128 msecs"
 
 (comment (get-ids  (core/search index-store
                                 {::title "broccoli stilton soup"}
