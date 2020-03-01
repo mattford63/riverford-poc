@@ -136,27 +136,27 @@
   (testing "Add documents to an index:"
     (testing "simple case"
       (let [s "Bob, Dave, Carl, Anne"
-            file-name "foo.txt"]
-        (is (= {"anne" {:freq 1, :document-ids #{"foo.txt"}}
-                "bob" {:freq 1, :document-ids #{"foo.txt"}}
-                "carl" {:freq 1, :document-ids #{"foo.txt"}}
-                "dave" {:freq 1, :document-ids #{"foo.txt"}}}
-               (add-to-index nil s file-name)))))
+            id 1]
+        (is (= {"anne" {:freq 1 :document-ids [1]}
+                "bob" {:freq 1 :document-ids [1]}
+                "carl" {:freq 1 :document-ids [1]}
+                "dave" {:freq 1 :document-ids [1]}}
+               (add-to-index nil s id)))))
     (testing "multiple strings and file names"
       (let [s1 "Bob, Dave, Carl, Anne"
             s2 "Anne and Bob are married."
-            file-name1 "foo.txt"
-            file-name2 "bar.txt"]
-        (is (=  {"and" {:freq 1, :document-ids #{"bar.txt"}}
-                 "anne" {:freq 2, :document-ids #{"bar.txt" "foo.txt"}}
-                 "are" {:freq 1, :document-ids #{"bar.txt"}}
-                 "bob" {:freq 2, :document-ids #{"bar.txt" "foo.txt"}}
-                 "carl" {:freq 1, :document-ids #{"foo.txt"}}
-                 "dave" {:freq 1, :document-ids #{"foo.txt"}}
-                 "married" {:freq 1, :document-ids #{"bar.txt"}}}
+            id1 1
+            id2 2]
+        (is (=  {"and"  {:freq 1 :document-ids [2]}
+                 "anne" {:freq 2 :document-ids [1 2]}
+                 "are"  {:freq 1 :document-ids [2]}
+                 "bob"  {:freq 2 :document-ids [1 2]}
+                 "carl" {:freq 1 :document-ids [1]}
+                 "dave" {:freq 1 :document-ids [1]}
+                 "married" {:freq 1 :document-ids [2]}}
                 (-> nil
-                    (add-to-index s1 file-name1)
-                    (add-to-index s2 file-name2))))))))
+                    (add-to-index s1 id1)
+                    (add-to-index s2 id2))))))))
 
 
 (deftest test-add-to-index-store
@@ -164,19 +164,37 @@
     (testing "simple case"
       (let [maps [{:a "hello there"
                    :b "hello back to you"
-                   :id "a.txt"}
+                   :id 1}
                   {:a "Another one!"
                    :b "back at you"
-                   :id "b.txt"}]]
+                   :id 2}]]
         (is (= {:a
-                {"another" {:freq 1, :document-ids #{"b.txt"}}
-                 "hello" {:freq 1, :document-ids #{"a.txt"}}
-                 "one" {:freq 1, :document-ids #{"b.txt"}}
-                 "there" {:freq 1, :document-ids #{"a.txt"}}}
+                {"another" {:freq 1, :document-ids [2]}
+                 "hello" {:freq 1, :document-ids [1]}
+                 "one" {:freq 1, :document-ids [2]}
+                 "there" {:freq 1, :document-ids [1]}}
                 :b
-                {"at" {:freq 1, :document-ids #{"b.txt"}}
-                 "back" {:freq 2, :document-ids #{"a.txt" "b.txt"}}
-                 "hello" {:freq 1, :document-ids #{"a.txt"}}
-                 "to" {:freq 1, :document-ids #{"a.txt"}}
-                 "you" {:freq 2, :document-ids #{"a.txt" "b.txt"}}}}
+                {"at" {:freq 1, :document-ids [2]}
+                 "back" {:freq 2, :document-ids [1 2]}
+                 "hello" {:freq 1, :document-ids [1]}
+                 "to" {:freq 1, :document-ids [1]}
+                 "you" {:freq 2, :document-ids [1 2]}}}
                (add-to-index-store {} maps [:a :b] :id)))))))
+
+(deftest test-intersect-sorted-seq
+  (testing "Sorted intersect:"
+    (testing "simple cases"
+      (is (= [2 3] (intersect-sorted-seq [1 2 3] [2 3 4])))
+      (is (= [2 3] (intersect-sorted-seq [2 3 4] [2 3])))
+      (is (= [] (intersect-sorted-seq [] [2 3 4])))
+      (is (= [] (intersect-sorted-seq [] [])))
+      (is (= [] (intersect-sorted-seq [2 3 4] [])))
+      (is (= [] (intersect-sorted-seq [1 2 3] [4 5 6]))))))
+
+(deftest test-sorted-insert
+  (testing "Sorted inserts"
+    (testing "simple cases"
+      (is (= [1 2 3] (sorted-insert [1 3] 2)))
+      (is (= [1 3]   (sorted-insert [1 3] nil)))
+      (is (= [1 2 3] (sorted-insert [2 3] 1)))
+      (is (= [1 2 3] (sorted-insert [1 2] 3))))))

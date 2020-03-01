@@ -31,20 +31,23 @@
       (clojure.string/replace ":" "")
       keyword+))
 
+(spec/def ::id int?)
 (spec/def ::file-name string?)
 (spec/def ::title string?)
 (spec/def ::introduction string?)
 (spec/def ::ingredients string?)
 (spec/def ::method string?)
-(spec/def ::recipe (spec/keys :req [::file-name ::title ::introduction ::ingredients ::method]))
+(spec/def ::recipe (spec/keys :req [::id ::file-name ::title ::introduction ::ingredients ::method]))
 
 
 (defn split-recipe [recipe-seq]
   (split-by-short #(case % ("File-Name:" "Title:" "Introduction:"
                             "Ingredients:" "Method:") true false) recipe-seq))
 
+(def id (atom 0))
+
 (defn recipe-seq-to-map [recipe-seq]
-  (let [recipe-map (into {} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
+  (let [recipe-map (into {::id (swap! id inc)} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
     (if (not (spec/valid? ::recipe recipe-map))
       (do (spec/explain ::recipe recipe-map)
           nil)
@@ -52,7 +55,8 @@
 
 (defn read-recipe [recipe-file]
   (with-open [rdr (clojure.java.io/reader recipe-file)]
-    (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)] (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
+    (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)]
+                             (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
       (recipe-seq-to-map recipe-seq))))
 
 (def recipe-dir (clojure.java.io/file recipe-dir-name))
@@ -99,6 +103,15 @@
 ;; Reverse Index
 ;;
 
+(defn sorted-insert [sorted-seq n]
+  (loop [s sorted-seq, a []]
+    (cond
+      (nil? n)         s
+      (empty? s)       (conj a n)
+      (< (first s) n)  (recur (rest s) (conj a (first s)))
+      (= (first s) n)  (recur (rest s) a)
+      :else            (apply conj a n s))))
+
 (defn- update-index-term [{:keys [freq document-ids]} freq-inc document-id]
   "Update an index term by adding the frequency and adding the
   document id to a sorted set.
@@ -106,7 +119,7 @@
   Term is the literature name for word"
 
   {:freq ((fnil #(+ freq-inc %) 0) freq)
-   :document-ids ((fnil #(conj % document-id) (sorted-set)) document-ids)})
+   :document-ids ((fnil #(sorted-insert % document-id) []) document-ids)})
 
 (defn add-to-index [index s document-id]
   "Add to index, a sorted map, the linguistic tokens (updating
@@ -125,7 +138,7 @@
                       (update a k #(add-to-index % (k m) (id-fn m)))) acc ks))
           index-store maps))
 
-(def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::file-name ))
+(def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::id ))
 
 (comment
   "Simple one word searches in an index in a index-store"
@@ -138,15 +151,13 @@
 
 ;; https://stackoverflow.com/questions/14160830/idiomatic-efficient-clojure-way-to-intersect-two-a-priori-sorted-vectors
 (defn intersect-sorted-seq [x y]
-  (time (let [x (seq x)
-              y (seq y)]
-          (loop [i 0, j 0, r (transient [])]
-            (let [xi (nth x i nil), yj (nth y j nil)]
-              (cond
-                (not (and xi yj)) (persistent! r)
-                (< (compare xi yj) 0) (recur (inc i) j r)
-                (> (compare xi yj) 0) (recur i (inc j) r)
-                :else (recur (inc i) (inc j) (conj! r xi))))))))
+  (loop [i 0, j 0, r (transient [])]
+    (let [xi (nth x i nil), yj (nth y j nil)]
+      (cond
+        (not (and xi yj)) (persistent! r)
+        (< xi yj) (recur (inc i) j r)
+        (> xi yj) (recur i (inc j) r)
+        :else (recur (inc i) (inc j) (conj! r xi))))))
 
 (defn intersect [terms]
   (let [index (::ingredients custom-index-store)
@@ -162,7 +173,9 @@
 (comment
   "Intersect searches over common words"
   (time (intersect ["and" "the" "of"])) ;; ~50ms ["afelia.txt" "baked-peppers-with-mozzarella-pesto-ross.txt" "boulangere-potatoes.txt" "chicken-kiev.txt" "grilled-leg-of-lamb-with-swiss-chard-and.txt" "lemony-chicken-and-spinach-curry.txt" "slow-cooked-black-kale-bruschetta.txt" "swede-leek-bacon-gratin.txt" "vietnamese-style-carrot-cabbage-slaw.txt"]
-  )
+  (time (intersect ["and" "the" "of"])) ;; ~0.43ms [73 343 363 553 827 1123 1231 1690 1967]
+  (time (intersect ["broccoli" "stilton"])) ;; ~0.12ms [1299 1518]
+)
 
 ;; --------
 ;; Add to Clucie
