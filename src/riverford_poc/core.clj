@@ -158,17 +158,47 @@
         (> xi yj) (recur i (inc j) r)
         :else (recur (inc i) (inc j) (conj! r xi))))))
 
-(defn intersect [index terms]
-  (let [results (select-keys index terms)]
-    (if (seq results)
-      (reduce intersect-sorted-seq
-              (-> (into (sorted-map-by (fn [k1 k2]
-                                         (compare [(get-in results [k1 :freq]) k1]
-                                                  [(get-in results [k2 :freq]) k2])))
-                        results) ;; sort lowest to highest based on sort frequency
-                  (vals)
-                  (->>(map :document-ids))))
-      [])))
+(defn union-sorted-seq [x y]
+  (loop [i 0, j 0, r (transient [])]
+    (let [xi (nth x i nil), yj (nth y j nil)]
+      (cond
+        (and (nil? xi) (nil? yj)) (persistent! r)
+        (nil? yj) (recur (inc i) j (conj! r xi)) ;; we could safely concat the remainder
+        (nil? xi) (recur i (inc j) (conj! r yj)) ;; we could safely concat the remainder
+        (< xi yj) (recur (inc i) j (conj! r xi))
+        (> xi yj) (recur i (inc j) (conj! r yj))
+        :else (recur (inc i) (inc j) (conj! r xi))))))
+
+(defn normalise-terms [terms]
+  (map clojure.string/lower-case terms))
+
+(defn match-keys [index terms]
+  "We can increasing sophistication to how search words are matched to
+  index keys here.
+
+  This is alternative approach to adding words stems etc at index
+  creation time"
+  (select-keys index (normalise-terms terms)))
+
+(defn reduce-by-freq [reducer]
+  "This function for efficiency sorts the results on frequency: lowest
+   frequency first so the least work is done on reduce operations.  It
+   first selects the sorted vector of document ids before reducing
+   over them."
+  (fn [index terms]
+    (let [results (match-keys index terms)]
+      (if (seq results)
+        (reduce reducer
+                (-> (into (sorted-map-by (fn [k1 k2]
+                                           (compare [(get-in results [k1 :freq]) k1]
+                                                    [(get-in results [k2 :freq]) k2])))
+                          results) ;; sort lowest to highest based on sort frequency
+                    (vals)
+                    (->>(map :document-ids))))
+        []))))
+
+(def intersect (reduce-by-freq intersect-sorted-seq))
+(def union (reduce-by-freq union-sorted-seq))
 
 (comment
   "Intersect searches over common words"

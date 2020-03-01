@@ -194,6 +194,17 @@
       (is (= [] (intersect-sorted-seq [2 3 4] [])))
       (is (= [] (intersect-sorted-seq [1 2 3] [4 5 6]))))))
 
+(deftest test-union-sorted-seq
+  (testing "Sorted intersect:"
+    (testing "simple cases"
+      (is (= [1 2 3 4] (union-sorted-seq [1 2 3] [2 3 4])))
+      (is (= [2 3 4] (union-sorted-seq [2 3 4] [2 3])))
+      (is (= [2 3 4] (union-sorted-seq [] [2 3 4])))
+      (is (= [] (union-sorted-seq [] [])))
+      (is (= [2 3 4] (union-sorted-seq [2 3 4] [])))
+      (is (= [1 2 3 4 5 6] (union-sorted-seq [1 2 3] [4 5 6])))
+      (is (= [1 2 3 4 5 6] (union-sorted-seq [4 5 6] [1 2 3]))))))
+
 (deftest test-sorted-insert
   (testing "Sorted inserts"
     (testing "simple cases"
@@ -216,3 +227,19 @@
         (is (= [] (intersect index [""])))
         (is (= [2 3] (intersect index ["and" "anne"])))
         (is (= [2] (intersect index ["and" "bob" "married"])))))))
+
+(deftest test-union
+  (testing "Unions over indexes"
+    (testing "simple cases"
+      (let [data [["Bob, Dave, Carl, Anne" 1]
+                  ["Anne and Bob are married." 2]
+                  ["Carl and Anne met for lunch" 3]]
+            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)]
+        (is (= [1 2 3] (union index ["anne"])))
+        (is (= [1 2 3] (union index ["AnNe"])))
+        (is (= [2 3] (union index ["and"])))
+        (is (= [2] (union index ["are"])))
+        (is (= [] (union index ["moonshine"])))
+        (is (= [] (union index [""])))
+        (is (= [1 2 3] (union index ["and" "anne"])))
+        (is (= [1 2 3] (union index ["and" "bob" "married"])))))))
