@@ -48,7 +48,8 @@
                         "Jack and Jill went up the hill"
                         "Method:"
                         "All the kings horses"]
-            recipe-map #:riverford-poc.core{:file-name "foo.txt"
+            recipe-map #:riverford-poc.core{:id (inc @id)
+                                            :file-name "foo.txt"
                                             :title "Little Red Riding hood"
                                             :introduction "A lot of fairy tales"
                                             :ingredients "Jack and Jill went up the hill"
@@ -71,7 +72,8 @@
                         "Method:"
                         "All the kings horses"
                         "Humpty!"]
-            recipe-map #:riverford-poc.core{:file-name "foo.txt"
+            recipe-map #:riverford-poc.core{:id (inc @id)
+                                            :file-name "foo.txt"
                                             :title "Little Red Riding hood\n\nGoldilocks"
                                             :introduction "A lot of fairy tales\nMake our world great"
                                             :ingredients "Jack and Jill went up the hill\n\nTo fetch a pale of water"
@@ -83,7 +85,8 @@
                         "Introduction:"
                         "Ingredients:"
                         "Method:"]
-            recipe-map #:riverford-poc.core{:file-name ""
+            recipe-map #:riverford-poc.core{:id (inc @id)
+                                            :file-name ""
                                             :title ""
                                             :introduction ""
                                             :ingredients ""
@@ -207,6 +210,7 @@
                   ["Carl and Anne met for lunch" 3]]
             index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)]
         (is (= [1 2 3] (intersect index ["anne"])))
+        (is (= [1 2 3] (intersect index ["AnNe"])))
         (is (= [2 3] (intersect index ["and"])))
         (is (= [] (intersect index ["moonshine"])))
         (is (= [] (intersect index [""])))
