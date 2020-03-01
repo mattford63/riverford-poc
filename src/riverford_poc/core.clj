@@ -97,7 +97,7 @@
                 acc)) result matched-tokens)))
 
 (defn combined-tokenizer [s]
-  (-> s lexical-tokenizer linguistic-tokenizer))
+  (-> (str s) lexical-tokenizer linguistic-tokenizer))
 
 ;; ---------
 ;; Reverse Index
@@ -140,8 +140,9 @@
 
 (comment
   "Simple one word searches in an index in a index-store"
-  (def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::id ))
+  (def custom-index-store (add-to-index-store {} recipes [::id ::title] ::id ))
   (get (::file-name custom-index-store) "brussels")
+  (get (::title custom-index-store) "brussels")
   (get (::ingredients custom-index-store) "sauce"))
 
 ;; --------
