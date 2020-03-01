@@ -45,13 +45,15 @@
                             "Ingredients:" "Method:") true false) recipe-seq))
 
 (def id (atom 0))
+(def ids (atom []))
 
 (defn recipe-seq-to-map [recipe-seq]
   (let [recipe-map (into {::id (swap! id inc)} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
     (if (not (spec/valid? ::recipe recipe-map))
       (do (spec/explain ::recipe recipe-map)
           nil)
-      recipe-map)))
+      (do (swap! ids conj @id)
+          recipe-map))))
 
 (defn read-recipe [recipe-file]
   (with-open [rdr (clojure.java.io/reader recipe-file)]
@@ -140,7 +142,7 @@
 
 (comment
   "Simple one word searches in an index in a index-store"
-  (def custom-index-store (add-to-index-store {} recipes [::id ::title] ::id ))
+  (def custom-index-store (add-to-index-store {} recipes [::title ::ingredients] ::id ))
   (get (::file-name custom-index-store) "brussels")
   (get (::title custom-index-store) "brussels")
   (get (::ingredients custom-index-store) "sauce"))
@@ -170,6 +172,17 @@
         (> xi yj) (recur i (inc j) (conj! r yj))
         :else (recur (inc i) (inc j) (conj! r xi))))))
 
+(defn subtraction-sorted-seq [x y]
+  (loop [i 0, j 0, r (transient [])]
+    (let [xi (nth x i nil), yj (nth y j nil)]
+      (cond
+        (and (nil? xi) (nil? yj)) (persistent! r)
+        (nil? yj) (recur (inc i) j (conj! r xi))
+        (nil? xi) (persistent! r)
+        (< xi yj) (recur (inc i) j (conj! r xi))
+        (> xi yj) (recur i (inc j) r)
+        :else (recur (inc i) (inc j) r)))))
+
 (defn normalise-terms [terms]
   (map clojure.string/lower-case terms))
 
@@ -197,9 +210,33 @@
                     (vals)
                     (->>(map :document-ids))))
         []))))
+;;--------
+;; Logical operators
 
 (def intersect (reduce-by-freq intersect-sorted-seq))
 (def union (reduce-by-freq union-sorted-seq))
+
+;; (defn not' [logical-operator index-store index terms]
+;;   "If we create an index of ::ids then we can use it as an index of
+;;   records.  However it requires a re-factor to use index-stores
+;;   everywhere.  So for time reasons we cheat with an atom to record
+;;   this info."
+;;   (let [results (logical-operator index-store index terms)
+;;         id-index (get index-store index)]
+;;     (map #(Integer/parseInt %) (keys (apply dissoc id-index (map str results))))))
+
+(defn not'
+  "TODO: DO NOT USE IN CURRENT STATE
+  We allow an optional set of ids to be passed so that we can easily
+  test else we default to the atom containing all used ids.
+
+  This is also problematic as what we really need is the list of all
+  ids for the index of question."
+  ([logical-operator index terms]
+   (not' logical-operator index terms @ids))
+  ([logical-operator index terms ids]
+   (let [results (logical-operator index terms)]
+     (subtraction-sorted-seq ids results))))
 
 (comment
   "Intersect searches over common words"

@@ -205,6 +205,17 @@
       (is (= [1 2 3 4 5 6] (union-sorted-seq [1 2 3] [4 5 6])))
       (is (= [1 2 3 4 5 6] (union-sorted-seq [4 5 6] [1 2 3]))))))
 
+(deftest test-subtraction-sorted-seq
+  (testing "Sorted intersect:"
+    (testing "simple cases"
+      (is (= [1] (subtraction-sorted-seq [1 2 3] [2 3 4])))
+      (is (= [4] (subtraction-sorted-seq [2 3 4] [2 3])))
+      (is (= [] (subtraction-sorted-seq [] [2 3 4])))
+      (is (= [] (subtraction-sorted-seq [] [])))
+      (is (= [2 3 4] (subtraction-sorted-seq [2 3 4] [])))
+      (is (= [1 2 3] (subtraction-sorted-seq [1 2 3] [4 5 6])))
+      (is (= [4 5 6] (subtraction-sorted-seq [4 5 6] [1 2 3]))))))
+
 (deftest test-sorted-insert
   (testing "Sorted inserts"
     (testing "simple cases"
@@ -243,3 +254,34 @@
         (is (= [] (union index [""])))
         (is (= [1 2 3] (union index ["and" "anne"])))
         (is (= [1 2 3] (union index ["and" "bob" "married"])))))))
+
+(deftest test-not
+  (testing "Negation of selection:"
+    (testing "over intersection"
+      (let [data [["Bob, Dave, Carl, Anne" 1]
+                  ["Anne and Bob are married." 2]
+                  ["Carl and Anne met for lunch" 3]]
+            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)
+            ids   [1 2 3]]
+        (is (= [] (not' intersect index ["anne"] ids)))
+        (is (= [] (not' intersect index ["AnNe"] ids)))
+        (is (= [1] (not' intersect index ["and"] ids)))
+        (is (= [1 2 3] (not' intersect index ["moonshine"] ids)))
+        (is (= [1 2 3] (not' intersect index [""] ids)))
+        (is (= [1] (not' intersect index ["and" "anne"] ids)))
+        (is (= [1 3] (not' intersect index ["and" "bob" "married"] ids)))
+        ))
+    (testing "over union"
+      (let [data [["Bob, Dave, Carl, Anne" 1]
+                  ["Anne and Bob are married." 2]
+                  ["Carl and Anne met for lunch" 3]]
+            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)
+            ids [ 1 2 3]]
+        (is (= [] (not' union index ["anne"] ids)))
+        (is (= [] (not' union index ["AnNe"] ids)))
+        (is (= [1] (not' union index ["and"] ids)))
+        (is (= [1 2 3] (not' union index ["moonshine"] ids)))
+        (is (= [1 2 3] (not' union index [""] ids)))
+        (is (= [] (not' union index ["and" "anne"] ids)))
+        (is (= [] (not' union index ["and" "bob" "married"] ids)))
+        ))))
