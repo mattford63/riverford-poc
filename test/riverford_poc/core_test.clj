@@ -115,9 +115,9 @@
     (testing "simple case"
       (let [s "Bob, Dave, Carl, Anne."
             linguistic-tokens (sorted-map "anne" 1 "bob" 1 "carl" 1 "dave" 1)]
-        (is (= linguistic-tokens (-> s lexical-tokenizer linguistic-tokenizer)))
-        (is (= (keys linguistic-tokens) (keys (-> s lexical-tokenizer linguistic-tokenizer))))
-        (is (not (= ["bob" "dave" "carl" "anne"] (keys (-> s lexical-tokenizer linguistic-tokenizer)))))))
+        (is (= linguistic-tokens (combined-tokenizer s)))
+        (is (= (keys linguistic-tokens) (keys (combined-tokenizer s))))
+        (is (not (= ["bob" "dave" "carl" "anne"] (combined-tokenizer s))))))
     (testing "real recipe"
       (let [s "It may sound like a glass of superfood buzzwords, but it works splendidly. To extract as much juice as possible from leafy veg, roll them together tightly before putting them through the machine. This should yield about 300ml of juice, but will vary depending on the oomph of your juicer. The trick to getting maximum flavour is to start with the more fibrous and difficult-to-juice items, and finish with the juicier and higher-yield items; they will flush through all the preceding flavour. Ingredients are listed in the best order in which to plunge."]
         (is (= (sorted-map "300ml" 1 "a" 1 "about" 1 "all" 1 "and" 3 "are" 1 "as" 2 "before" 1
@@ -130,4 +130,53 @@
                            "sound" 1 "splendidly" 1 "start" 1 "superfood" 1 "the" 7 "them" 2 "they" 1
                            "this" 1 "through" 2 "tightly" 1 "to" 5 "together" 1 "trick" 1 "vary" 1
                            "veg" 1 "which" 1 "will" 2 "with" 2 "works" 1 "yield" 2 "your" 1)
-               (-> s lexical-tokenizer linguistic-tokenizer)))))))
+               (combined-tokenizer s)))))))
+
+(deftest test-add-to-index
+  (testing "Add documents to an index:"
+    (testing "simple case"
+      (let [s "Bob, Dave, Carl, Anne"
+            file-name "foo.txt"]
+        (is (= {"anne" {:freq 1, :document-ids #{"foo.txt"}}
+                "bob" {:freq 1, :document-ids #{"foo.txt"}}
+                "carl" {:freq 1, :document-ids #{"foo.txt"}}
+                "dave" {:freq 1, :document-ids #{"foo.txt"}}}
+               (add-to-index nil s file-name)))))
+    (testing "multiple strings and file names"
+      (let [s1 "Bob, Dave, Carl, Anne"
+            s2 "Anne and Bob are married."
+            file-name1 "foo.txt"
+            file-name2 "bar.txt"]
+        (is (=  {"and" {:freq 1, :document-ids #{"bar.txt"}}
+                 "anne" {:freq 2, :document-ids #{"bar.txt" "foo.txt"}}
+                 "are" {:freq 1, :document-ids #{"bar.txt"}}
+                 "bob" {:freq 2, :document-ids #{"bar.txt" "foo.txt"}}
+                 "carl" {:freq 1, :document-ids #{"foo.txt"}}
+                 "dave" {:freq 1, :document-ids #{"foo.txt"}}
+                 "married" {:freq 1, :document-ids #{"bar.txt"}}}
+                (-> nil
+                    (add-to-index s1 file-name1)
+                    (add-to-index s2 file-name2))))))))
+
+
+(deftest test-add-to-index-store
+  (testing "Add sequence of maps to an index store:"
+    (testing "simple case"
+      (let [maps [{:a "hello there"
+                   :b "hello back to you"
+                   :id "a.txt"}
+                  {:a "Another one!"
+                   :b "back at you"
+                   :id "b.txt"}]]
+        (is (= {:a
+                {"another" {:freq 1, :document-ids #{"b.txt"}}
+                 "hello" {:freq 1, :document-ids #{"a.txt"}}
+                 "one" {:freq 1, :document-ids #{"b.txt"}}
+                 "there" {:freq 1, :document-ids #{"a.txt"}}}
+                :b
+                {"at" {:freq 1, :document-ids #{"b.txt"}}
+                 "back" {:freq 2, :document-ids #{"a.txt" "b.txt"}}
+                 "hello" {:freq 1, :document-ids #{"a.txt"}}
+                 "to" {:freq 1, :document-ids #{"a.txt"}}
+                 "you" {:freq 2, :document-ids #{"a.txt" "b.txt"}}}}
+               (add-to-index-store {} maps [:a :b] :id)))))))

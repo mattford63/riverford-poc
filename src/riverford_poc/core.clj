@@ -68,14 +68,6 @@
 ;; #:riverford-poc.core{:id "blueberry-friands.txt", :title "Blueberry friands", :introduction "Friands are little cakes made with ground nuts – either almonds or hazelnuts. Usually baked in an oval shape, they're suitable for a muffin tin too. You can add different flavours to them. Here we've used blueberries from our grower on Dartmoor. You could sprinkle over other berries or even a few chopped plums, when in season."} - failed: (contains? % :riverford-poc.core/method) spec: :riverford-poc.core/recipe
 
 ;; --------
-;; Add to Clucie
-;;
-
-(def analyzer (analysis/standard-analyzer))
-(def index-store (store/memory-store))
-(core/add! index-store recipes [::file-name ::title ::introduction ::ingredients ::method] analyzer)
-
-;; --------
 ;; Tokenizer
 ;;
 
@@ -92,17 +84,94 @@
   keep it very simple, ignoring position, lower-casing and returning
   sorted map of frequency.
 
-  Sophisticated things are \"stem\" words, hyphenation, names, phrases etc."
+  Sophisticated things are \"stem\" words, hyphenation, names,
+  file-names, phrases etc."
   (let [result (sorted-map)]
     (reduce (fn [acc {:keys [consumed postition token-name]}]
               (if (= token-name :word)
                 (update acc (clojure.string/lower-case consumed) (fnil inc 0))
                 acc)) result matched-tokens)))
 
+(defn combined-tokenizer [s]
+  (-> s lexical-tokenizer linguistic-tokenizer))
+
+;; ---------
+;; Reverse Index
+;;
+
+(defn- update-index-term [{:keys [freq document-ids]} freq-inc document-id]
+  "Update an index term by adding the frequency and adding the
+  document id to a sorted set.
+
+  Term is the literature name for word"
+
+  {:freq ((fnil #(+ freq-inc %) 0) freq)
+   :document-ids ((fnil #(conj % document-id) (sorted-set)) document-ids)})
+
+(defn add-to-index [index s document-id]
+  "Add to index, a sorted map, the linguistic tokens (updating
+  frequencies) resulting from parsing s and registering the document
+  id"
+  (reduce (fn [acc [token freq]]
+            (update acc token #(update-index-term % freq document-id)))
+          (or index (sorted-map)) (combined-tokenizer s)))
+
+(defn add-to-index-store [index-store maps ks id-fn]
+  "Build an index store (collection of indexes) from a sequence of
+  maps with the specified keys as indexes. Used id-fn to get the doc
+  id from the map."
+  (reduce (fn [acc m]
+            (reduce (fn [a k]
+                      (update a k #(add-to-index % (k m) (id-fn m)))) acc ks))
+          index-store maps))
+
+(def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::file-name ))
+
+(comment
+  "Simple one word searches in an index in a index-store"
+  (get (::file-name custom-index-store) "brussels")
+  (get (::ingredients custom-index-store) "sauce"))
 
 ;; --------
-;; Do some searches
+;; Searches
 ;;
+
+;; https://stackoverflow.com/questions/14160830/idiomatic-efficient-clojure-way-to-intersect-two-a-priori-sorted-vectors
+(defn intersect-sorted-seq [x y]
+  (time (let [x (seq x)
+              y (seq y)]
+          (loop [i 0, j 0, r (transient [])]
+            (let [xi (nth x i nil), yj (nth y j nil)]
+              (cond
+                (not (and xi yj)) (persistent! r)
+                (< (compare xi yj) 0) (recur (inc i) j r)
+                (> (compare xi yj) 0) (recur i (inc j) r)
+                :else (recur (inc i) (inc j) (conj! r xi))))))))
+
+(defn intersect [terms]
+  (let [index (::ingredients custom-index-store)
+        results (select-keys index terms)]
+    (reduce intersect-sorted-seq
+            (-> (into (sorted-map-by (fn [k1 k2]
+                                       (compare [(get-in results [k1 :freq]) k1]
+                                                [(get-in results [k2 :freq]) k2])))
+                      results) ;; sort lowest to highest based on sort frequency
+                (vals)
+                (->>(map :document-ids))))))
+
+(comment
+  "Intersect searches over common words"
+  (time (intersect ["and" "the" "of"])) ;; ~50ms ["afelia.txt" "baked-peppers-with-mozzarella-pesto-ross.txt" "boulangere-potatoes.txt" "chicken-kiev.txt" "grilled-leg-of-lamb-with-swiss-chard-and.txt" "lemony-chicken-and-spinach-curry.txt" "slow-cooked-black-kale-bruschetta.txt" "swede-leek-bacon-gratin.txt" "vietnamese-style-carrot-cabbage-slaw.txt"]
+  )
+
+;; --------
+;; Add to Clucie
+;;
+
+(def analyzer (analysis/standard-analyzer))
+(def index-store (store/memory-store))
+(core/add! index-store recipes [::file-name ::title ::introduction ::ingredients ::method] analyzer)
+
 
 (defn get-ids [s] (time (map ::file-name s))) ;; "Elapsed time: 0.001128 msecs"
 
@@ -113,7 +182,7 @@
                                 0
                                 10)) ;; ("broccoli-soup-with-stilton.txt" "cauliflower-stilton-soup.txt" "broccoli-bulghur-stilton-grapes.txt" "broccoli-soup-with-gorgonzola.txt" "broccoli-bean-pasta-soup.txt" "squash-chard-stilton-pithivier.txt" "kale-potato-28-celeriac-29-stilton-pie.txt" "purple-sprouting-broccoli-bean-and-pasta.txt" "fillet-steak-with-stilton-herb-roasted-v.txt" "squash-kale-stilton-pie.txt")
          (get-ids  (core/search index-store
-                                {::ingredients "broccoli stilton"}
+                                {::ingredients "and the of"}
                                 10
                                 analyzer
                                 0
