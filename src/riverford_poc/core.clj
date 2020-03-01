@@ -324,4 +324,9 @@
   (d (intersect-sorted-seq (subtraction-sorted-seq (intersect (::ingredients index-store) ["cheese"])
                                                    (intersect (::ingredients index-store) ["stilton"]))
                            (union (::method index-store ) ["baked" "fry"])))
+
+  ;; Add a new file to the store, creates a new index-store.
+  ;; - doesn't update the ::all index
+  ;; - maybe index-store should be atomic
+  (add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::file-name ::title ::introduction ::method ::ingredients] ::id)
   )
