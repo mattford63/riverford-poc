@@ -5,6 +5,7 @@
             :url "https://www.eclipse.org/legal/epl-2.0/"}
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [me.raynes/fs "1.4.6"]
-                 [clucie "0.4.2"]
-                 [cljcc "0.1.3"]]
-  :repl-options {:init-ns riverford-poc.core})
+                 [cljcc "0.1.3"]
+                 [com.clojure-goes-fast/clj-memory-meter "0.1.2"]]
+  :repl-options {:init-ns riverford-poc.core}
+  :jvm-opts ["-Djdk.attach.allowAttachSelf"])

@@ -1,16 +1,12 @@
 (ns riverford-poc.core
   (:require [clojure.spec.alpha :as spec]
             [me.raynes.fs :as fs]
-            [clucie.core :as core]
-            [clucie.store :as store]
-            [clucie.analysis :as analysis]
-            [cljcc]))
+            [cljcc]
+            [clj-memory-meter.core :as mm]))
 
 ;; ---------
 ;; Read in and validate recipes
 ;;
-
-(def recipe-dir-name "/Users/matt/Downloads/recipes/") ;; unzipped dir of recipes
 
 (defn split-by-short [pred coll]
   "Splits a sequence by predicate but always splits on predicate success"
@@ -23,7 +19,7 @@
          (cons (cons x skip)
                (split-by-short pred others)))))))
 
-(defn keyword+ [s] (keyword (str *ns*) s))
+(defn keyword+ [s] (keyword "riverford-poc.core" s))
 
 (defn normalised-keyword [s]
   (-> s
@@ -44,15 +40,19 @@
   (split-by-short #(case % ("File-Name:" "Title:" "Introduction:"
                             "Ingredients:" "Method:") true false) recipe-seq))
 
+;; Global id state
 (def id (atom 0))
 (def ids (atom []))
+(def id->file (atom {}))
 
 (defn recipe-seq-to-map [recipe-seq]
+  "We could make this parallel but not worth it for now"
   (let [recipe-map (into {::id (swap! id inc)} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
     (if (not (spec/valid? ::recipe recipe-map))
       (do (spec/explain ::recipe recipe-map)
           nil)
       (do (swap! ids conj @id)
+          (swap! id->file assoc @id (::file-name recipe-map))
           recipe-map))))
 
 (defn read-recipe [recipe-file]
@@ -60,10 +60,6 @@
     (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)]
                              (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
       (recipe-seq-to-map recipe-seq))))
-
-(def recipe-dir (clojure.java.io/file recipe-dir-name))
-(def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
-(def recipes (map read-recipe recipe-files))
 
 ;; --------
 ;; Tokenizer
@@ -251,3 +247,81 @@
 
 (defn add-composite-index-to-index-store [index-store name indexes]
   (assoc index-store name (merge-indexes (-> (select-keys index-store indexes) vals))))
+
+;; -------
+;; REPL helper functions
+;;
+
+(defmacro wrap-time [txt body]
+  `(do (println ~txt)
+       (time ~body)))
+
+(defn display [n results]
+  (let [c (count results)]
+    (println "\n" c "results:"
+             (clojure.string/join ", " (take n (map #(get @id->file %) results)))
+             (if (> c n) "..." )
+             "\n")))
+
+(def d5 (partial display 5))
+
+(defmacro d [body]
+  `(time (d5 ~body)))
+
+;; -------
+;; Example time :-)
+;;
+
+(comment
+  ;; C-x C-e to execute within a comment not C-c C-c
+
+  ;; Read recipes
+  ;; - dir location assumes unzipped dir of recipes
+  (def recipe-dir-name "/Users/matt/Downloads/recipes/")
+  (def recipe-dir (clojure.java.io/file recipe-dir-name))
+  (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
+  (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files)))
+
+  ;; Build an index store
+  ;; - add an index by recipe section
+  ;; - add an ::all index for full text recipe searching
+  ;; - this takes a little whilst as it's search that's optimised not ingestion
+  ;; - on my machine it takes ~53 seconds
+  (def index-store (wrap-time "Building index-store..."
+                              (-> (add-to-index-store (sorted-map) recipes [::file-name ::title ::introduction ::method ::ingredients] ::id)
+                                  (add-composite-index-to-index-store ::all [::title ::introduction ::method ::ingredients]))))
+
+  ;; How big is the index-store?
+  ;; ~10MB roughly the size of the unzipped files on disk
+  (mm/measure index-store)
+
+  ;; To search for a single term use an intersection with one term
+  ;; To restrict to a recipe section select the appropriate index
+  (d (intersect (::ingredients index-store) ["broccoli"]))
+
+  ;; To search everywhere in the recipe use the ::all index
+  ;; Use intersect and a vector of terms to do an AND
+  (d (intersect (::all index-store) ["broccoli" "stilton" "soup"]))
+
+  ;; To search with an OR use union
+  (d (union (::method index-store) ["fry" "heat" "cook"]))
+  (d (union (::method index-store) ["broccoli" "stilton" "soup"]))
+
+  ;; We can use the NOT operator only with the :all index at present
+  (d (not' intersect (::all index-store) ["and" "the" "if" "or" "a"] ))
+
+  ;; The most taxing searches will involve intersections of common
+  ;; words across the ::all index
+  ;; - on average these all seem to be <1ms
+  (d (intersect (::all index-store) ["i" "and" "the" "if" "or" "a"]))
+  (d (union (::all index-store) ["i" "and" "the" "if" "or" "a"]))
+
+  ;; Complex queries can be written
+  ;; We want all recipes that have cheese as an ingredient but not
+  ;; Stilton and have baked or fry in the method.
+  ;; This is the longest query time wise at ~1.4ms
+
+  (d (intersect-sorted-seq (subtraction-sorted-seq (intersect (::ingredients index-store) ["cheese"])
+                                                   (intersect (::ingredients index-store) ["stilton"]))
+                           (union (::method index-store ) ["baked" "fry"])))
+  )

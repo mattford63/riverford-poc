@@ -48,13 +48,12 @@
                         "Jack and Jill went up the hill"
                         "Method:"
                         "All the kings horses"]
-            recipe-map #:riverford-poc.core{:id (inc @id)
-                                            :file-name "foo.txt"
+            recipe-map #:riverford-poc.core{:file-name "foo.txt"
                                             :title "Little Red Riding hood"
                                             :introduction "A lot of fairy tales"
                                             :ingredients "Jack and Jill went up the hill"
                                             :method "All the kings horses"}]
-        (is (= recipe-map (recipe-seq-to-map recipe-seq)))))
+        (is (= recipe-map (dissoc (recipe-seq-to-map recipe-seq) :riverford-poc.core/id)))))
     (testing "more than one line in sections"
       (let [recipe-seq ["File-Name:"
                         "foo.txt"
@@ -72,26 +71,24 @@
                         "Method:"
                         "All the kings horses"
                         "Humpty!"]
-            recipe-map #:riverford-poc.core{:id (inc @id)
-                                            :file-name "foo.txt"
+            recipe-map #:riverford-poc.core{:file-name "foo.txt"
                                             :title "Little Red Riding hood\n\nGoldilocks"
                                             :introduction "A lot of fairy tales\nMake our world great"
                                             :ingredients "Jack and Jill went up the hill\n\nTo fetch a pale of water"
                                             :method "All the kings horses\nHumpty!"}]
-        (is (= recipe-map (recipe-seq-to-map recipe-seq)))))
+        (is (= recipe-map (dissoc (recipe-seq-to-map recipe-seq) :riverford-poc.core/id)))))
     (testing "empty recipe"
       (let [recipe-seq ["File-Name:"
                         "Title:"
                         "Introduction:"
                         "Ingredients:"
                         "Method:"]
-            recipe-map #:riverford-poc.core{:id (inc @id)
-                                            :file-name ""
+            recipe-map #:riverford-poc.core{:file-name ""
                                             :title ""
                                             :introduction ""
                                             :ingredients ""
                                             :method ""}]
-        (is (= recipe-map (recipe-seq-to-map recipe-seq)))))))
+        (is (= recipe-map (dissoc (recipe-seq-to-map recipe-seq) :riverford-poc.core/id)))))))
 
 ;; Tokenizer
 
