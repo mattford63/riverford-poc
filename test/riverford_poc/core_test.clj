@@ -285,3 +285,85 @@
         (is (= [] (not' union index ["and" "anne"] ids)))
         (is (= [] (not' union index ["and" "bob" "married"] ids)))
         ))))
+
+(deftest test-merge-index-terms
+  (testing "Merge index terms: "
+    (testing "simple case"
+      (let [term1 {:freq 3 :document-ids [1 2 3]}
+            term2 {:freq 2 :document-ids [1 5]}]
+        (is (= {:freq 5 :document-ids [1 2 3 5]}
+               (merge-index-terms term1 term2)))
+        (is (= {:freq 3 :document-ids [1 2 3]}
+               (merge-index-terms term1 nil)))
+        (is (= {:freq 3 :document-ids [1 2 3]}
+               (merge-index-terms nil term1)))))))
+
+(deftest test-merge-index-pair
+  (testing "Add sequence of maps to an index store:"
+    (testing "simple case"
+      (let [maps [{:a "hello there"
+                   :b "hello back to you"
+                   :id 1}
+                  {:a "Another one!"
+                   :b "back at you"
+                   :id 2}]
+            index-store (add-to-index-store {} maps [:a :b] :id)]
+        (is (= {"another" {:freq 1 :document-ids [2]}
+                "hello"   {:freq 2 :document-ids [1]}
+                "one"     {:freq 1 :document-ids [2]}
+                "there"   {:freq 1 :document-ids [1]}
+                "at"      {:freq 1 :document-ids [2]}
+                "back"    {:freq 2 :document-ids [1 2]}
+                "to"      {:freq 1 :document-ids [1]}
+                "you"     {:freq 2 :document-ids [1 2]}}
+               (merge-index-pair (:a index-store) (:b index-store))))))))
+
+(deftest test-merge-indexes
+  (testing "Add sequence of maps to an index store:"
+    (testing "simple case"
+      (let [maps [{:a "hello there"
+                   :b "hello back to you"
+                   :id 1}
+                  {:a "Another one!"
+                   :b "back at you"
+                   :id 2}
+                  {:a "harry"
+                   :c "amelia"
+                   :id 3}]
+            index-store (add-to-index-store {} maps [:a :b :c] :id)]
+        (is (= {"amelia"  {:freq 1 :document-ids [3]}
+                "harry"   {:freq 1 :document-ids [3]}
+                "another" {:freq 1 :document-ids [2]}
+                "hello"   {:freq 2 :document-ids [1]}
+                "one"     {:freq 1 :document-ids [2]}
+                "there"   {:freq 1 :document-ids [1]}
+                "at"      {:freq 1 :document-ids [2]}
+                "back"    {:freq 2 :document-ids [1 2]}
+                "to"      {:freq 1 :document-ids [1]}
+                "you"     {:freq 2 :document-ids [1 2]}}
+               (merge-indexes [(:a index-store) (:b index-store) (:c index-store)])))))))
+
+(deftest test-add-composite-index-to-index-store
+  (testing "Add sequence of maps to an index store:"
+    (testing "simple case"
+      (let [maps [{:a "hello there"
+                   :b "hello back to you"
+                   :id 1}
+                  {:a "Another one!"
+                   :b "back at you"
+                   :id 2}
+                  {:a "harry"
+                   :c "amelia"
+                   :id 3}]
+            index-store (add-to-index-store {} maps [:a :b :c] :id)]
+        (is (= {"amelia"  {:freq 1 :document-ids [3]}
+                "harry"   {:freq 1 :document-ids [3]}
+                "another" {:freq 1 :document-ids [2]}
+                "hello"   {:freq 2 :document-ids [1]}
+                "one"     {:freq 1 :document-ids [2]}
+                "there"   {:freq 1 :document-ids [1]}
+                "at"      {:freq 1 :document-ids [2]}
+                "back"    {:freq 2 :document-ids [1 2]}
+                "to"      {:freq 1 :document-ids [1]}
+                "you"     {:freq 2 :document-ids [1 2]}}
+               (:all (add-composite-index-to-index-store index-store :all [:a :b :c]))))))))
