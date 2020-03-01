@@ -198,3 +198,17 @@
       (is (= [1 3]   (sorted-insert [1 3] nil)))
       (is (= [1 2 3] (sorted-insert [2 3] 1)))
       (is (= [1 2 3] (sorted-insert [1 2] 3))))))
+
+(deftest test-intersect
+  (testing "Intersects over indexes"
+    (testing "simple cases"
+      (let [data [["Bob, Dave, Carl, Anne" 1]
+                  ["Anne and Bob are married." 2]
+                  ["Carl and Anne met for lunch" 3]]
+            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)]
+        (is (= [1 2 3] (intersect index ["anne"])))
+        (is (= [2 3] (intersect index ["and"])))
+        (is (= [] (intersect index ["moonshine"])))
+        (is (= [] (intersect index [""])))
+        (is (= [2 3] (intersect index ["and" "anne"])))
+        (is (= [2] (intersect index ["and" "bob" "married"])))))))

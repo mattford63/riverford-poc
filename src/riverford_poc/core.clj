@@ -138,10 +138,9 @@
                       (update a k #(add-to-index % (k m) (id-fn m)))) acc ks))
           index-store maps))
 
-(def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::id ))
-
 (comment
   "Simple one word searches in an index in a index-store"
+  (def custom-index-store (add-to-index-store {} recipes [::file-name ::title ::introduction ::ingredients ::method] ::id ))
   (get (::file-name custom-index-store) "brussels")
   (get (::ingredients custom-index-store) "sauce"))
 
@@ -159,22 +158,24 @@
         (> xi yj) (recur i (inc j) r)
         :else (recur (inc i) (inc j) (conj! r xi))))))
 
-(defn intersect [terms]
-  (let [index (::ingredients custom-index-store)
-        results (select-keys index terms)]
-    (reduce intersect-sorted-seq
-            (-> (into (sorted-map-by (fn [k1 k2]
-                                       (compare [(get-in results [k1 :freq]) k1]
-                                                [(get-in results [k2 :freq]) k2])))
-                      results) ;; sort lowest to highest based on sort frequency
-                (vals)
-                (->>(map :document-ids))))))
+(defn intersect [index terms]
+  (let [results (select-keys index terms)]
+    (if (seq results)
+      (reduce intersect-sorted-seq
+              (-> (into (sorted-map-by (fn [k1 k2]
+                                         (compare [(get-in results [k1 :freq]) k1]
+                                                  [(get-in results [k2 :freq]) k2])))
+                        results) ;; sort lowest to highest based on sort frequency
+                  (vals)
+                  (->>(map :document-ids))))
+      [])))
 
 (comment
   "Intersect searches over common words"
-  (time (intersect ["and" "the" "of"])) ;; ~50ms ["afelia.txt" "baked-peppers-with-mozzarella-pesto-ross.txt" "boulangere-potatoes.txt" "chicken-kiev.txt" "grilled-leg-of-lamb-with-swiss-chard-and.txt" "lemony-chicken-and-spinach-curry.txt" "slow-cooked-black-kale-bruschetta.txt" "swede-leek-bacon-gratin.txt" "vietnamese-style-carrot-cabbage-slaw.txt"]
-  (time (intersect ["and" "the" "of"])) ;; ~0.43ms [73 343 363 553 827 1123 1231 1690 1967]
-  (time (intersect ["broccoli" "stilton"])) ;; ~0.12ms [1299 1518]
+  (def ingredients (::ingredients custom-index-store))
+  (time (intersect ingredients ["and" "the" "of"])) ;; ~50ms ["afelia.txt" "baked-peppers-with-mozzarella-pesto-ross.txt" "boulangere-potatoes.txt" "chicken-kiev.txt" "grilled-leg-of-lamb-with-swiss-chard-and.txt" "lemony-chicken-and-spinach-curry.txt" "slow-cooked-black-kale-bruschetta.txt" "swede-leek-bacon-gratin.txt" "vietnamese-style-carrot-cabbage-slaw.txt"]
+  (time (intersect ingredients ["and" "the" "of"])) ;; ~0.43ms [73 343 363 553 827 1123 1231 1690 1967]
+  (time (intersect ingredients ["broccoli" "stilton"])) ;; ~0.12ms [1299 1518]
 )
 
 ;; --------
