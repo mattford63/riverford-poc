@@ -352,6 +352,7 @@
 
   (d (intersect index-store ::ingredients ["chicken"]))
   (d (intersect-rel index-store ::ingredients ["chicken"]))
+  (d (intersect-rel index-store ::ingredients ["spinach" "chicken" "garlic"]))
 
   ;; To search everywhere in the recipe use the ::all index
   ;; Use intersect and a vector of terms to do an AND
@@ -369,8 +370,8 @@
   ;; The most taxing searches will involve intersections of common
   ;; words across the ::all index
   ;; - on average these all seem to be <1ms
-  (d (intersect (::all index-store) ["i" "and" "the" "if" "or" "a"]))
-  (d (union (::all index-store) ["i" "and" "the" "if" "or" "a"]))
+  (d (intersect index-store :all ["i" "and" "the" "if" "or" "a"]))
+  (d (union index-store :all ["i" "and" "the" "if" "or" "a"]))
 
   ;; Complex queries can be written
   ;; We want all recipes that have cheese as an ingredient but not
@@ -381,9 +382,9 @@
   ;;   intersection functions (i.e, ones that don't rely on ordering) can
   ;;   used instead.
 
-  (d (intersect-sorted-seq (subtraction-sorted-seq (intersect (::ingredients index-store) ["cheese"])
-                                                   (intersect (::ingredients index-store) ["stilton"]))
-                           (union (::method index-store ) ["baked" "fry"])))
+  (d (intersect-sorted-seq (subtraction-sorted-seq (intersect index-store ::ingredients ["cheese"])
+                                                   (intersect index-store ::ingredients  ["stilton"]))
+                           (union index-store ::method ["baked" "fry"])))
 
   ;; Add a new file to the store, creates a new index-store.
   ;; - maybe index-store should be atomic
