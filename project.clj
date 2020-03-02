@@ -6,6 +6,8 @@
   :dependencies [[org.clojure/clojure "1.10.0"]
                  [me.raynes/fs "1.4.6"]
                  [cljcc "0.1.3"]
-                 [com.clojure-goes-fast/clj-memory-meter "0.1.2"]]
+                 [com.clojure-goes-fast/clj-memory-meter "0.1.2"]
+                 [clojure-stemmer "0.1.0"]
+                 [clj-fuzzy "0.4.1"]]
   :repl-options {:init-ns riverford-poc.core}
   :jvm-opts ["-Djdk.attach.allowAttachSelf"])

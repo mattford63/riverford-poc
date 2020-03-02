@@ -2,7 +2,8 @@
   (:require [clojure.spec.alpha :as spec]
             [me.raynes.fs :as fs]
             [cljcc]
-            [clj-memory-meter.core :as mm]))
+            [clj-memory-meter.core :as mm]
+            [clj-fuzzy.porter :as porter]))
 
 ;; ---------
 ;; Read in and validate recipes
@@ -78,13 +79,14 @@
   keep it very simple, ignoring position, lower-casing and returning
   sorted map of frequency.
 
-  Sophisticated things are \"stem\" words, hyphenation, names,
-  file-names, phrases etc."
+  We use the Porter stemmer
+  https://www.cs.odu.edu/~jbollen/IR04/readings/readings5.pdf"
   (let [result (sorted-map)]
     (reduce (fn [acc {:keys [consumed postition token-name]}]
               (if (= token-name :word)
-                (update acc (clojure.string/lower-case consumed) (fnil inc 0))
-                acc)) result matched-tokens)))
+                (update acc (porter/stem consumed) (fnil inc 0))
+                acc))
+            result matched-tokens)))
 
 (defn combined-tokenizer [s]
   (-> (str s) lexical-tokenizer linguistic-tokenizer))
@@ -182,7 +184,7 @@
         :else (recur (inc i) (inc j) r)))))
 
 (defn normalise-terms [terms]
-  (map clojure.string/lower-case terms))
+  (map porter/stem terms))
 
 (defn match-keys [index terms]
   "We can increasing sophistication to how search words are matched to
