@@ -265,14 +265,14 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)]
-        (is (= [1 2 3] (intersect index ["anne"])))
-        (is (= [1 2 3] (intersect index ["AnNe"])))
-        (is (= [2 3] (intersect index ["and"])))
-        (is (= [] (intersect index ["moonshine"])))
-        (is (= [] (intersect index [""])))
-        (is (= [2 3] (intersect index ["and" "anne"])))
-        (is (= [2] (intersect index ["and" "bob" "married"])))))))
+            index-store {:test (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)}]
+        (is (= [1 2 3] (intersect index-store :test ["anne"])))
+        (is (= [1 2 3] (intersect index-store :test ["AnNe"])))
+        (is (= [2 3] (intersect index-store :test ["and"])))
+        (is (= [] (intersect index-store :test ["moonshine"])))
+        (is (= [] (intersect index-store :test [""])))
+        (is (= [2 3] (intersect index-store :test ["and" "anne"])))
+        (is (= [2] (intersect index-store :test ["and" "bob" "married"])))))))
 
 (deftest test-union
   (testing "Unions over indexes"
@@ -280,15 +280,15 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)]
-        (is (= [1 2 3] (union index ["anne"])))
-        (is (= [1 2 3] (union index ["AnNe"])))
-        (is (= [2 3] (union index ["and"])))
-        (is (= [2] (union index ["are"])))
-        (is (= [] (union index ["moonshine"])))
-        (is (= [] (union index [""])))
-        (is (= [1 2 3] (union index ["and" "anne"])))
-        (is (= [1 2 3] (union index ["and" "bob" "married"])))))))
+            index-store {:test (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)}]
+        (is (= [1 2 3] (union index-store :test ["anne"])))
+        (is (= [1 2 3] (union index-store :test ["AnNe"])))
+        (is (= [2 3] (union index-store :test ["and"])))
+        (is (= [2] (union index-store :test ["are"])))
+        (is (= [] (union index-store :test ["moonshine"])))
+        (is (= [] (union index-store :test [""])))
+        (is (= [1 2 3] (union index-store :test ["and" "anne"])))
+        (is (= [1 2 3] (union index-store :test ["and" "bob" "married"])))))))
 
 (deftest test-not
   (testing "Negation of selection:"
@@ -296,29 +296,29 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)
+            index-store {:test (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)}
             ids   [1 2 3]]
-        (is (= [] (not' intersect index ["anne"] ids)))
-        (is (= [] (not' intersect index ["AnNe"] ids)))
-        (is (= [1] (not' intersect index ["and"] ids)))
-        (is (= [1 2 3] (not' intersect index ["moonshine"] ids)))
-        (is (= [1 2 3] (not' intersect index [""] ids)))
-        (is (= [1] (not' intersect index ["and" "anne"] ids)))
-        (is (= [1 3] (not' intersect index ["and" "bob" "married"] ids)))
+        (is (= [] (not' intersect index-store :test ["anne"] ids)))
+        (is (= [] (not' intersect index-store :test ["AnNe"] ids)))
+        (is (= [1] (not' intersect index-store :test ["and"] ids)))
+        (is (= [1 2 3] (not' intersect index-store :test ["moonshine"] ids)))
+        (is (= [1 2 3] (not' intersect index-store :test [""] ids)))
+        (is (= [1] (not' intersect index-store :test ["and" "anne"] ids)))
+        (is (= [1 3] (not' intersect index-store :test ["and" "bob" "married"] ids)))
         ))
     (testing "over union"
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)
+            index-store {:test (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)}
             ids [ 1 2 3]]
-        (is (= [] (not' union index ["anne"] ids)))
-        (is (= [] (not' union index ["AnNe"] ids)))
-        (is (= [1] (not' union index ["and"] ids)))
-        (is (= [1 2 3] (not' union index ["moonshine"] ids)))
-        (is (= [1 2 3] (not' union index [""] ids)))
-        (is (= [] (not' union index ["and" "anne"] ids)))
-        (is (= [] (not' union index ["and" "bob" "married"] ids)))
+        (is (= [] (not' union index-store :test ["anne"] ids)))
+        (is (= [] (not' union index-store :test ["AnNe"] ids)))
+        (is (= [1] (not' union index-store :test ["and"] ids)))
+        (is (= [1 2 3] (not' union index-store :test ["moonshine"] ids)))
+        (is (= [1 2 3] (not' union index-store :test [""] ids)))
+        (is (= [] (not' union index-store :test ["and" "anne"] ids)))
+        (is (= [] (not' union index-store :test ["and" "bob" "married"] ids)))
         ))))
 
 (deftest test-merge-index-terms

@@ -192,27 +192,48 @@
   creation time"
   (select-keys index (normalise-terms terms)))
 
-(defn reduce-by-freq [reducer]
+(defn relevance-identity [seq index-store index terms]
+  "Does nothing returns the sequence in order"
+  seq)
+
+(defn relevance-intersect-1st-term-freq [seq index-store index terms]
+  "Uses the first term in the intersection and orders based on it's frequency
+
+   This is a very naive implementation of relevance, used just to show
+   off the capability we have.
+
+   Literature search is required to see what algorithms exist in this
+   space.  These fns could even be passed as part of the search DSL."
+  (let [term (first terms)
+        get-freq (fn [id] (get-in index-store [id index term :freq] 0))]
+    (sort-by get-freq #(compare %2 %1) seq)))
+
+(defn reduce-by-freq [reducer relevancy-sorter]
   "This function for efficiency sorts the results on frequency: lowest
    frequency first so the least work is done on reduce operations.  It
    first selects the sorted vector of document ids before reducing
    over them."
-  (fn [index terms]
-    (let [results (match-keys index terms)]
+  (fn [index-store index terms]
+    (let [results (match-keys (get index-store index) terms)]
       (if (seq results)
-        (reduce reducer
-                (-> (into (sorted-map-by (fn [k1 k2]
-                                           (compare [(get-in results [k1 :freq]) k1]
-                                                    [(get-in results [k2 :freq]) k2])))
-                          results) ;; sort lowest to highest based on sort frequency
-                    (vals)
-                    (->>(map :document-ids))))
+        (-> (reduce reducer
+                    (-> (into (sorted-map-by (fn [k1 k2]
+                                               (compare [(get-in results [k1 :freq]) k1]
+                                                        [(get-in results [k2 :freq]) k2])))
+                              results) ;; sort lowest to highest based on sort frequency
+                       (vals)
+                       (->>(map :document-ids))))
+            (relevancy-sorter index-store index terms))
         []))))
+
 ;;--------
 ;; Logical operators
 
-(def intersect (reduce-by-freq intersect-sorted-seq))
-(def union (reduce-by-freq union-sorted-seq))
+(def intersect (reduce-by-freq intersect-sorted-seq relevance-identity))
+(def union (reduce-by-freq union-sorted-seq relevance-identity))
+
+(def intersect-rel (reduce-by-freq intersect-sorted-seq relevance-intersect-1st-term-freq))
+(def union-rel (reduce-by-freq union-sorted-seq relevance-intersect-1st-term-freq))
 
 ;; (defn not' [logical-operator index-store index terms]
 ;;   "If we create an index of ::ids then we can use it as an index of
@@ -230,10 +251,10 @@
 
   This is also problematic as what we really need is the list of all
   ids for the index of question."
-  ([logical-operator index terms]
-   (not' logical-operator index terms @ids))
-  ([logical-operator index terms ids]
-   (let [results (logical-operator index terms)]
+  ([logical-operator index-store index terms]
+   (not' logical-operator index-store index terms @ids))
+  ([logical-operator index-store index terms ids]
+   (let [results (logical-operator index-store index terms)]
      (subtraction-sorted-seq ids results))))
 
 ;; --------
@@ -268,15 +289,15 @@
 
 (defn display [n results]
   (let [c (count results)]
-    (println "\n" c "results:"
-             (clojure.string/join ", " (take n (map #(get @id->file %) results)))
+    (println "\n" c "results:\n- "
+             (clojure.string/join "\n-  " (take n (map #(get @id->file %) results)))
              (if (> c n) "..." )
              "\n")))
 
-(def d5 (partial display 5))
+(def d10 (partial display 10))
 
 (defmacro d [body]
-  `(time (d5 ~body)))
+  `(time (d10 ~body)))
 
 ;; -------
 ;; Example time :-)
@@ -294,7 +315,6 @@
 
   ;; Build an index store
   ;; - add an index by recipe section
-  ;; - add an ::all index for full text recipe searching
   ;; - this takes a little whilst as it's search that's optimised not ingestion
   ;; - on my machine it takes ~50 seconds
   (def index-store (wrap-time "Building index-store..."
@@ -309,20 +329,42 @@
   ;; The file indexes can be made much more efficient
   (mm/measure index-store)
 
+  ;; An example search and expected output
+  (d (intersect-rel index-store ::all ["riverford"]))
+  ;; 33 results:
+  ;; -  sweet-chilli-chicken-wings-with-slaw.txt
+  ;; -  lamb-and-mint-burgers-tzatziki-greek-sal.txt
+  ;; -  turnips-caramelised-butter-wine.txt
+  ;; -  asian-coleslaw-with-peanuts-chilli.txt
+  ;; -  kale-and-chorizo-soup.txt
+  ;; -  lemon-and-thyme-roasted-chicken.txt
+  ;; -  courgette-fennel-kohlrabi-salad.txt
+  ;; -  chinese-style-pulled-pork.txt
+  ;; -  purple-sprouting-broccoli-with-hollandai.txt
+  ;; -  country-pate.txt ...
+  ;; "Elapsed time: 1.691325 msecs"
+
   ;; To search for a single term use an intersection with one term
-  ;; To restrict to a recipe section select the appropriate index
-  (d (intersect (::ingredients index-store) ["broccoli"]))
+  ;; To restrict to a recipe section, select the appropriate index.
+  ;; - notice the difference between the relevance and non-relevance sorted results.
+  (d (intersect index-store ::ingredients ["broccoli"]))
+  (d (intersect-rel index-store ::ingredients ["broccoli"]))
+
+  (d (intersect index-store ::ingredients ["chicken"]))
+  (d (intersect-rel index-store ::ingredients ["chicken"]))
 
   ;; To search everywhere in the recipe use the ::all index
   ;; Use intersect and a vector of terms to do an AND
-  (d (intersect (::all index-store) ["broccoli" "stilton" "soup"]))
+  (d (intersect-rel index-store ::all ["broccoli" "stilton" "soup"]))
 
   ;; To search with an OR use union
-  (d (union (::method index-store) ["fry" "heat" "cook"]))
-  (d (union (::method index-store) ["broccoli" "stilton" "soup"]))
+  ;; With 1st term relevance
+  (d (union-rel index-store ::method  ["fry" "heat" "cook"]))
+  (d (union-rel index-store ::method  ["broccoli" "stilton" "soup"]))
 
   ;; We can use the NOT operator only with the :all index at present
-  (d (not' intersect (::all index-store) ["and" "the" "if" "or" "a"] ))
+  ;; It's also limited to non-relevance search results.
+  (d (not' intersect index-store ::all  ["and" "the" "if" "or" "a"] ))
 
   ;; The most taxing searches will involve intersections of common
   ;; words across the ::all index
@@ -334,13 +376,17 @@
   ;; We want all recipes that have cheese as an ingredient but not
   ;; Stilton and have baked or fry in the method.
   ;; This is the longest query time wise at ~1.4ms
+  ;; - relevancy is hard to manage here as the logic operators require
+  ;;   the ordering to exist to work properly. To fix more general
+  ;;   intersection functions (i.e, ones that don't rely on ordering) can
+  ;;   used instead.
 
   (d (intersect-sorted-seq (subtraction-sorted-seq (intersect (::ingredients index-store) ["cheese"])
                                                    (intersect (::ingredients index-store) ["stilton"]))
                            (union (::method index-store ) ["baked" "fry"])))
 
   ;; Add a new file to the store, creates a new index-store.
-  ;; - doesn't update the ::all index
   ;; - maybe index-store should be atomic
+
   (add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::title ::introduction ::method ::ingredients] ::id)
   )

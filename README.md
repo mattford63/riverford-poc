@@ -75,7 +75,7 @@ remember to unzip and change the directory location appropriately.
 - The `not` implementation is naive and very restricted at present to
   where it can be used.  The fix is to maintain in each index a full
   list of the document ids used in that index.
-- The storage format is very effecient now that each document is added
+- The storage format is very in-efficient now that each document is added
   as in index in the store.  The memory consumption of the index-store
   is around x15 of the size of the on-disk space.
 
@@ -94,11 +94,11 @@ remember to unzip and change the directory location appropriately.
 - ~~At present the individual document frequencies are lost when
   combined. A more sophisticated reverse index data structure would
   allow this data to be kept - this would open up the door to
-  relevancy scoring based on term frequency.~~
+  relevancy scoring based on term frequency.~~ DONE
 - The tokenizer used records word position, by extending the reverse
   index data structure even further we could capture this also.
 - Think about whether the index-store should be atomic.
-- Think about a mechanism of updating the all index on other index updates.
+- ~~Think about a mechanism of updating the all index on other index updates.~~ DONE
 - Parallelise the input (possibly transducers) but is it worth it?
 
 
