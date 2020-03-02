@@ -141,7 +141,7 @@
                 "bob" {:freq 1 :document-ids [1]}
                 "carl" {:freq 1 :document-ids [1]}
                 "dave" {:freq 1 :document-ids [1]}}
-               (add-to-index nil s id)))))
+               (add-to-index nil (combined-tokenizer s) id)))))
     (testing "multiple strings and file names"
       (let [s1 "Bob, Dave, Carl, Anne"
             s2 "Anne and Bob are married."
@@ -155,8 +155,8 @@
                  "dave" {:freq 1 :document-ids [1]}
                  "married" {:freq 1 :document-ids [2]}}
                 (-> nil
-                    (add-to-index s1 id1)
-                    (add-to-index s2 id2))))))))
+                    (add-to-index (combined-tokenizer s1) id1)
+                    (add-to-index (combined-tokenizer s2) id2))))))))
 
 
 (deftest test-add-to-index-store
@@ -169,16 +169,54 @@
                    :b "back at you"
                    :id 2}]]
         (is (= {:a
-                {"another" {:freq 1, :document-ids [2]}
-                 "hello" {:freq 1, :document-ids [1]}
-                 "one" {:freq 1, :document-ids [2]}
-                 "there" {:freq 1, :document-ids [1]}}
-                :b
-                {"at" {:freq 1, :document-ids [2]}
-                 "back" {:freq 2, :document-ids [1 2]}
-                 "hello" {:freq 1, :document-ids [1]}
-                 "to" {:freq 1, :document-ids [1]}
-                 "you" {:freq 2, :document-ids [1 2]}}}
+           {"another" {:freq 1, :document-ids [2]},
+            "hello" {:freq 1, :document-ids [1]},
+            "one" {:freq 1, :document-ids [2]},
+            "there" {:freq 1, :document-ids [1]}},
+           :riverford-poc.core/all
+           {"another" {:freq 1, :document-ids [2]},
+            "at" {:freq 1, :document-ids [2]},
+            "back" {:freq 2, :document-ids [1 2]},
+            "hello" {:freq 2, :document-ids [1]},
+            "one" {:freq 1, :document-ids [2]},
+            "there" {:freq 1, :document-ids [1]},
+            "to" {:freq 1, :document-ids [1]},
+            "you" {:freq 2, :document-ids [1 2]}},
+           1
+           {:a
+            {"hello" {:freq 1, :document-ids [1]},
+             "there" {:freq 1, :document-ids [1]}},
+            :riverford-poc.core/all
+            {"back" {:freq 1, :document-ids [1]},
+             "hello" {:freq 2, :document-ids [1]},
+             "there" {:freq 1, :document-ids [1]},
+             "to" {:freq 1, :document-ids [1]},
+             "you" {:freq 1, :document-ids [1]}},
+            :b
+            {"back" {:freq 1, :document-ids [1]},
+             "hello" {:freq 1, :document-ids [1]},
+             "to" {:freq 1, :document-ids [1]},
+             "you" {:freq 1, :document-ids [1]}}},
+           :b
+           {"at" {:freq 1, :document-ids [2]},
+            "back" {:freq 2, :document-ids [1 2]},
+            "hello" {:freq 1, :document-ids [1]},
+            "to" {:freq 1, :document-ids [1]},
+            "you" {:freq 2, :document-ids [1 2]}},
+           2
+           {:a
+            {"another" {:freq 1, :document-ids [2]},
+             "one" {:freq 1, :document-ids [2]}},
+            :riverford-poc.core/all
+            {"another" {:freq 1, :document-ids [2]},
+             "at" {:freq 1, :document-ids [2]},
+             "back" {:freq 1, :document-ids [2]},
+             "one" {:freq 1, :document-ids [2]},
+             "you" {:freq 1, :document-ids [2]}},
+            :b
+            {"at" {:freq 1, :document-ids [2]},
+             "back" {:freq 1, :document-ids [2]},
+             "you" {:freq 1, :document-ids [2]}}}}
                (add-to-index-store {} maps [:a :b] :id)))))))
 
 (deftest test-intersect-sorted-seq
@@ -227,7 +265,7 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)]
+            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)]
         (is (= [1 2 3] (intersect index ["anne"])))
         (is (= [1 2 3] (intersect index ["AnNe"])))
         (is (= [2 3] (intersect index ["and"])))
@@ -242,7 +280,7 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)]
+            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)]
         (is (= [1 2 3] (union index ["anne"])))
         (is (= [1 2 3] (union index ["AnNe"])))
         (is (= [2 3] (union index ["and"])))
@@ -258,7 +296,7 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)
+            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)
             ids   [1 2 3]]
         (is (= [] (not' intersect index ["anne"] ids)))
         (is (= [] (not' intersect index ["AnNe"] ids)))
@@ -272,7 +310,7 @@
       (let [data [["Bob, Dave, Carl, Anne" 1]
                   ["Anne and Bob are married." 2]
                   ["Carl and Anne met for lunch" 3]]
-            index (reduce (fn [acc [s id]] (add-to-index acc s id)) (sorted-map) data)
+            index (reduce (fn [acc [s id]] (add-to-index acc (combined-tokenizer s) id)) (sorted-map) data)
             ids [ 1 2 3]]
         (is (= [] (not' union index ["anne"] ids)))
         (is (= [] (not' union index ["AnNe"] ids)))

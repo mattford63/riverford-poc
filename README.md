@@ -39,16 +39,20 @@ recipes are of a consistent format and have the following sections
 
 The code is written such that each section of the recipe is an index
 within the index-store.  Allowing searches to be constrained to a
-particular section.  Then a merge operation over the four indexes
+particular section.  ~~Then a merge operation over the four indexes
 creates a 5th index `all` - over which the entire recipe can be
-searched.
+searched.~~ Also, each document is stored as it's own index, each with
+it's own recipe section and a combined :all index.  There is also a
+single global :all index to search everything.  All these indexes
+allow relevancy based search at the expense of large increase in
+index-store size.
 
 The speed of the search comes from using ordered vectors as the data
 structure for the document ids in the reverse index. A class of
 merge-algorithms that rely on the fact that vectors are ordered offer
 more speed up when performing operations.  The computational expense
 of the initial import operation ~50s is the price paid up front for
-sub <1ms search later.
+sub <5ms search later.
 
 A DSL consisting of `intersect`, `union` and a limited `not` provide
 search operations over the index-store.
@@ -68,13 +72,17 @@ remember to unzip and change the directory location appropriately.
 
 ## Issues
 
-- the `not` implementation is naive and very restricted at present to
+- The `not` implementation is naive and very restricted at present to
   where it can be used.  The fix is to maintain in each index a full
   list of the document ids used in that index.
+- The storage format is very effecient now that each document is added
+  as in index in the store.  The memory consumption of the index-store
+  is around x15 of the size of the on-disk space.
 
 
 ## Future work
 
+- Use a more compact form of index for individual documents.
 - Migrate away from PoC code e.g. namespace fuctions appropriately,
   split tests etc.
 - It should be relatively quick to add one of the these clojure
@@ -83,10 +91,10 @@ remember to unzip and change the directory location appropriately.
   and
   [here](https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L174).
   This would be a good way to make the search seem way more sophisticated.
-- At present the individual document frequencies are lost when
+- ~~At present the individual document frequencies are lost when
   combined. A more sophisticated reverse index data structure would
   allow this data to be kept - this would open up the door to
-  relevancy scoring based on term frequency.
+  relevancy scoring based on term frequency.~~
 - The tokenizer used records word position, by extending the reverse
   index data structure even further we could capture this also.
 - Think about whether the index-store should be atomic.

@@ -111,21 +111,30 @@
   {:freq ((fnil #(+ freq-inc %) 0) freq)
    :document-ids ((fnil #(sorted-insert % document-id) []) document-ids)})
 
-(defn add-to-index [index s document-id]
+(defn add-to-index [index tokens document-id]
   "Add to index, a sorted map, the linguistic tokens (updating
   frequencies) resulting from parsing s and registering the document
   id"
   (reduce (fn [acc [token freq]]
             (update acc token #(update-index-term % freq document-id)))
-          (or index (sorted-map)) (combined-tokenizer s)))
+          (or index (sorted-map)) tokens))
 
 (defn add-to-index-store [index-store maps ks id-fn]
   "Build an index store (collection of indexes) from a sequence of
   maps with the specified keys as indexes. Used id-fn to get the doc
-  id from the map."
+  id from the map.
+
+  Now also stores an index per document added"
   (reduce (fn [acc m]
             (reduce (fn [a k]
-                      (update a k #(add-to-index % (k m) (id-fn m)))) acc ks))
+                      (let [tokens (combined-tokenizer (k m))
+                            id (id-fn m)]
+                        (-> a
+                            (update k #(add-to-index % tokens id)) ;; adds to section indexes
+                            (update ::all #(add-to-index % tokens id)) ;; adds to a global :all index
+                            (assoc-in [id k] (add-to-index nil tokens id)) ;; stores an index per document per section
+                            (update-in [id ::all ] #(add-to-index % tokens id)) ;; stores an :all index per document
+                            ))) acc ks))
           index-store maps))
 
 (comment
@@ -133,6 +142,7 @@
   (def custom-index-store (add-to-index-store {} recipes [::title ::ingredients] ::id ))
   (get (::file-name custom-index-store) "brussels")
   (get (::title custom-index-store) "brussels")
+  (get (::all custom-index-store) "brussels")
   (get (::ingredients custom-index-store) "sauce"))
 
 ;; --------
@@ -254,7 +264,7 @@
 
 (defmacro wrap-time [txt body]
   `(do (println ~txt)
-       (time ~body)))
+       (time  ~body)))
 
 (defn display [n results]
   (let [c (count results)]
@@ -286,13 +296,17 @@
   ;; - add an index by recipe section
   ;; - add an ::all index for full text recipe searching
   ;; - this takes a little whilst as it's search that's optimised not ingestion
-  ;; - on my machine it takes ~53 seconds
+  ;; - on my machine it takes ~50 seconds
   (def index-store (wrap-time "Building index-store..."
-                              (-> (add-to-index-store (sorted-map) recipes [::file-name ::title ::introduction ::method ::ingredients] ::id)
-                                  (add-composite-index-to-index-store ::all [::title ::introduction ::method ::ingredients]))))
+                              (do (reset! id 0)
+                                  (reset! ids [])
+                                  (reset! id->file {})
+                                  (add-to-index-store {} recipes [::title ::introduction ::method ::ingredients] ::id))))
 
   ;; How big is the index-store?
-  ;; ~10MB roughly the size of the unzipped files on disk
+  ;; ~150MB 15x roughly the size of the unzipped files on disk!
+  ;; The storage format is not optimized!!
+  ;; The file indexes can be made much more efficient
   (mm/measure index-store)
 
   ;; To search for a single term use an intersection with one term
@@ -328,5 +342,5 @@
   ;; Add a new file to the store, creates a new index-store.
   ;; - doesn't update the ::all index
   ;; - maybe index-store should be atomic
-  (add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::file-name ::title ::introduction ::method ::ingredients] ::id)
+  (add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::title ::introduction ::method ::ingredients] ::id)
   )
