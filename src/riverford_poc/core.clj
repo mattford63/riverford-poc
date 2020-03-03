@@ -89,8 +89,7 @@
   (let [result (sorted-map)]
     (reduce (fn [acc {:keys [consumed postition token-name]}]
               (if (= token-name :word)
-                (-> acc
-                    (update (-> consumed porter/stem pho/metaphone) (fnil inc 0)))
+                (update acc (-> consumed porter/stem pho/metaphone) (fnil inc 0))
                 acc))
             result matched-tokens)))
 
@@ -110,14 +109,14 @@
       (= (first s) n)  (recur (rest s) a)
       :else            (apply conj a n s))))
 
-(defn- update-index-term [{:keys [freq document-ids]} freq-inc document-id]
+(defn- update-index-term [{:keys [f i]} freq-inc document-id]
   "Update an index term by adding the frequency and adding the
   document id to a sorted set.
 
   Term is the literature name for word"
 
-  {:f ((fnil #(+ freq-inc %) 0) freq)
-   :i ((fnil #(sorted-insert % document-id) []) document-ids)})
+  {:f ((fnil #(+ freq-inc %) 0) f)
+   :i ((fnil #(sorted-insert % document-id) []) i)})
 
 (defn add-to-index [index tokens document-id]
   "Add to index, a sorted map, the linguistic tokens (updating
@@ -144,14 +143,6 @@
                             (update-in [id ::all ] #(add-to-index % tokens id)) ;; stores an :all index per document
                             ))) acc ks))
           index-store maps))
-
-(comment
-  "Simple one word searches in an index in a index-store"
-  (def custom-index-store (add-to-index-store {} recipes [::title ::ingredients] ::id ))
-  (get (::file-name custom-index-store) "brussels")
-  (get (::title custom-index-store) "brussels")
-  (get (::all custom-index-store) "brussels")
-  (get (::ingredients custom-index-store) "sauce"))
 
 ;; --------
 ;; Searches
@@ -200,7 +191,7 @@
 
   This is alternative approach to adding words stems etc at index
   creation time"
-  (select-keys index (normalise-terms terms)))
+  (select-keys index terms))
 
 (defn relevance-identity [seq index-store index terms]
   "Does nothing returns the sequence in order"
@@ -224,7 +215,8 @@
    first selects the sorted vector of document ids before reducing
    over them."
   (fn [index-store index terms]
-    (let [results (match-keys (get index-store index) terms)]
+    (let [normalised-terms (normalise-terms terms)
+          results (match-keys (get index-store index) normalised-terms)]
       (if (seq results)
         (-> (reduce reducer
                     (-> (into (sorted-map-by (fn [k1 k2]
@@ -233,7 +225,7 @@
                               results) ;; sort lowest to highest based on sort frequency
                        (vals)
                        (->>(map :i))))
-            (relevancy-sorter index-store index terms))
+            (relevancy-sorter index-store index normalised-terms))
         []))))
 
 ;;--------
@@ -326,7 +318,7 @@
   ;; Build an index store
   ;; - add an index by recipe section
   ;; - this takes a little whilst as it's search that's optimised not ingestion
-  ;; - on my machine it takes ~50 seconds
+  ;; - on my machine it takes ~60 seconds
   (def index-store (wrap-time "Building index-store..."
                               (do (reset! id 0)
                                   (reset! ids [])
@@ -342,6 +334,8 @@
 
   ;; An example search and expected output
   (d (intersect-rel index-store ::all ["riverford"]))
+  ;; This example may not reflect the current implementation: it's
+  ;; to show what to expect in the output.
   ;; 33 results:
   ;; -  sweet-chilli-chicken-wings-with-slaw.txt
   ;; -  lamb-and-mint-burgers-tzatziki-greek-sal.txt
@@ -359,11 +353,16 @@
   ;; To restrict to a recipe section, select the appropriate index.
   ;; - notice the difference between the relevance and non-relevance sorted results.
   (d (intersect index-store ::ingredients ["broccoli"]))
+
+  ;; Highlight all the different accepted spellings supported.
   (d (intersect-rel index-store ::ingredients ["broccoli"]))
+  (d (intersect-rel index-store ::ingredients ["brocoli"]))
+  (d (intersect-rel index-store ::ingredients ["brokolee"]))
 
   (d (intersect index-store ::ingredients ["chicken"]))
   (d (intersect-rel index-store ::ingredients ["chicken"]))
   (d (intersect-rel index-store ::ingredients ["spinach" "chicken" "garlic"]))
+  (d (intersect-rel index-store ::ingredients ["spinitch" "chickon" "garlik"]))
 
   ;; To search everywhere in the recipe use the ::all index
   ;; Use intersect and a vector of terms to do an AND

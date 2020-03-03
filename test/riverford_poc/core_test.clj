@@ -115,21 +115,76 @@
     (testing "simple case"
       (let [s "Bob, Dave, Carl, Anne."
             linguistic-tokens (sorted-map "anne" 1 "bob" 1 "carl" 1 "dave" 1)]
-        (is (= linguistic-tokens (combined-tokenizer s)))
-        (is (= (keys linguistic-tokens) (keys (combined-tokenizer s))))
+        (is (= {"AN" 1, "BB" 1, "KRL" 1, "TF" 1} (combined-tokenizer s)))
         (is (not (= ["bob" "dave" "carl" "anne"] (combined-tokenizer s))))))
     (testing "real recipe"
       (let [s "It may sound like a glass of superfood buzzwords, but it works splendidly. To extract as much juice as possible from leafy veg, roll them together tightly before putting them through the machine. This should yield about 300ml of juice, but will vary depending on the oomph of your juicer. The trick to getting maximum flavour is to start with the more fibrous and difficult-to-juice items, and finish with the juicier and higher-yield items; they will flush through all the preceding flavour. Ingredients are listed in the best order in which to plunge."]
-        (is (= (sorted-map "300ml" 1 "a" 1 "about" 1 "all" 1 "and" 3 "are" 1 "as" 2 "before" 1
-                           "best" 1 "but" 2 "buzzwords" 1 "depending" 1 "difficult" 1 "extract" 1
-                           "fibrous" 1 "finish" 1 "flavour" 2 "flush" 1
-                           "from" 1 "getting" 1 "glass" 1 "higher" 1 "in" 2 "ingredients" 1 "is" 1 "it" 2
-                           "items" 2 "juice" 3 "juicer" 1 "juicier" 1 "leafy" 1 "like" 1 "listed" 1
-                           "machine" 1 "maximum" 1 "may" 1 "more" 1 "much" 1 "of" 3 "on" 1 "oomph" 1
-                           "order" 1 "plunge" 1 "possible" 1 "preceding" 1 "putting" 1 "roll" 1 "should" 1
-                           "sound" 1 "splendidly" 1 "start" 1 "superfood" 1 "the" 7 "them" 2 "they" 1
-                           "this" 1 "through" 2 "tightly" 1 "to" 5 "together" 1 "trick" 1 "vary" 1
-                           "veg" 1 "which" 1 "will" 2 "with" 2 "works" 1 "yield" 2 "your" 1)
+        (is (= (sorted-map "0" 9,
+           "0M" 2,
+           "0RKH" 2,
+           "A" 1,
+           "ABT" 1,
+           "AL" 1,
+           "ANT" 3,
+           "AR" 1,
+           "AS" 2,
+           "BFR" 1,
+           "BST" 1,
+           "BSWRT" 1,
+           "BT" 2,
+           "EXTRKT" 1,
+           "FBR" 1,
+           "FK" 1,
+           "FLFR" 2,
+           "FLX" 1,
+           "FNX" 1,
+           "FR" 1,
+           "FRM" 1,
+           "HKHR" 1,
+           "IN" 2,
+           "INKRT" 1,
+           "IS" 1,
+           "IT" 2,
+           "ITM" 2,
+           "JK" 3,
+           "JSR" 2,
+           "JT" 1,
+           "KLS" 1,
+           "LF" 1,
+           "LK" 1,
+           "LST" 1,
+           "M" 1,
+           "ML" 1,
+           "MR" 1,
+           "MX" 1,
+           "MXMM" 1,
+           "MXN" 1,
+           "OF" 3,
+           "OMF" 1,
+           "ON" 1,
+           "ORTR" 1,
+           "PLNK" 1,
+           "PRST" 1,
+           "PSBL" 1,
+           "PT" 1,
+           "RL" 1,
+           "SNT" 1,
+           "SPLNTTL" 1,
+           "SPRFT" 1,
+           "STRT" 1,
+           "T" 5,
+           "TFKLT" 1,
+           "TJ0" 1,
+           "TPNT" 1,
+           "TRKK" 1,
+           "TTL" 1,
+           "W0" 2,
+           "WL" 2,
+           "WRK" 1,
+           "WX" 1,
+           "XLT" 1,
+           "YLT" 2,
+           "YR" 1)
                (combined-tokenizer s)))))))
 
 (deftest test-add-to-index
@@ -137,23 +192,23 @@
     (testing "simple case"
       (let [s "Bob, Dave, Carl, Anne"
             id 1]
-        (is (= {"anne" {:freq 1 :document-ids [1]}
-                "bob" {:freq 1 :document-ids [1]}
-                "carl" {:freq 1 :document-ids [1]}
-                "dave" {:freq 1 :document-ids [1]}}
+        (is (= {"AN" {:f 1, :i [1]},
+                "BB" {:f 1, :i [1]},
+                "KRL" {:f 1, :i [1]},
+                "TF" {:f 1, :i [1]}}
                (add-to-index nil (combined-tokenizer s) id)))))
     (testing "multiple strings and file names"
       (let [s1 "Bob, Dave, Carl, Anne"
             s2 "Anne and Bob are married."
             id1 1
             id2 2]
-        (is (=  {"and"  {:freq 1 :document-ids [2]}
-                 "anne" {:freq 2 :document-ids [1 2]}
-                 "are"  {:freq 1 :document-ids [2]}
-                 "bob"  {:freq 2 :document-ids [1 2]}
-                 "carl" {:freq 1 :document-ids [1]}
-                 "dave" {:freq 1 :document-ids [1]}
-                 "married" {:freq 1 :document-ids [2]}}
+        (is (= {"AN" {:f 2, :i [1 2]},
+                "ANT" {:f 1, :i [2]},
+                "AR" {:f 1, :i [2]},
+                "BB" {:f 2, :i [1 2]},
+                "KRL" {:f 1, :i [1]},
+                "MR" {:f 1, :i [2]},
+                "TF" {:f 1, :i [1]}}
                 (-> nil
                     (add-to-index (combined-tokenizer s1) id1)
                     (add-to-index (combined-tokenizer s2) id2))))))))
@@ -169,54 +224,47 @@
                    :b "back at you"
                    :id 2}]]
         (is (= {:a
-           {"another" {:freq 1, :document-ids [2]},
-            "hello" {:freq 1, :document-ids [1]},
-            "one" {:freq 1, :document-ids [2]},
-            "there" {:freq 1, :document-ids [1]}},
+           {"0R" {:f 1, :i [1]},
+            "AN0" {:f 1, :i [2]},
+            "HL" {:f 1, :i [1]},
+            "ON" {:f 1, :i [2]}},
            :riverford-poc.core/all
-           {"another" {:freq 1, :document-ids [2]},
-            "at" {:freq 1, :document-ids [2]},
-            "back" {:freq 2, :document-ids [1 2]},
-            "hello" {:freq 2, :document-ids [1]},
-            "one" {:freq 1, :document-ids [2]},
-            "there" {:freq 1, :document-ids [1]},
-            "to" {:freq 1, :document-ids [1]},
-            "you" {:freq 2, :document-ids [1 2]}},
+           {"0R" {:f 1, :i [1]},
+            "AN0" {:f 1, :i [2]},
+            "AT" {:f 1, :i [2]},
+            "BKK" {:f 2, :i [1 2]},
+            "HL" {:f 2, :i [1]},
+            "ON" {:f 1, :i [2]},
+            "T" {:f 1, :i [1]},
+            "Y" {:f 2, :i [1 2]}},
            1
-           {:a
-            {"hello" {:freq 1, :document-ids [1]},
-             "there" {:freq 1, :document-ids [1]}},
+           {:a {"0R" {:f 1, :i [1]}, "HL" {:f 1, :i [1]}},
             :riverford-poc.core/all
-            {"back" {:freq 1, :document-ids [1]},
-             "hello" {:freq 2, :document-ids [1]},
-             "there" {:freq 1, :document-ids [1]},
-             "to" {:freq 1, :document-ids [1]},
-             "you" {:freq 1, :document-ids [1]}},
+            {"0R" {:f 1, :i [1]},
+             "BKK" {:f 1, :i [1]},
+             "HL" {:f 2, :i [1]},
+             "T" {:f 1, :i [1]},
+             "Y" {:f 1, :i [1]}},
             :b
-            {"back" {:freq 1, :document-ids [1]},
-             "hello" {:freq 1, :document-ids [1]},
-             "to" {:freq 1, :document-ids [1]},
-             "you" {:freq 1, :document-ids [1]}}},
+            {"BKK" {:f 1, :i [1]},
+             "HL" {:f 1, :i [1]},
+             "T" {:f 1, :i [1]},
+             "Y" {:f 1, :i [1]}}},
            :b
-           {"at" {:freq 1, :document-ids [2]},
-            "back" {:freq 2, :document-ids [1 2]},
-            "hello" {:freq 1, :document-ids [1]},
-            "to" {:freq 1, :document-ids [1]},
-            "you" {:freq 2, :document-ids [1 2]}},
+           {"AT" {:f 1, :i [2]},
+            "BKK" {:f 2, :i [1 2]},
+            "HL" {:f 1, :i [1]},
+            "T" {:f 1, :i [1]},
+            "Y" {:f 2, :i [1 2]}},
            2
-           {:a
-            {"another" {:freq 1, :document-ids [2]},
-             "one" {:freq 1, :document-ids [2]}},
+           {:a {"AN0" {:f 1, :i [2]}, "ON" {:f 1, :i [2]}},
             :riverford-poc.core/all
-            {"another" {:freq 1, :document-ids [2]},
-             "at" {:freq 1, :document-ids [2]},
-             "back" {:freq 1, :document-ids [2]},
-             "one" {:freq 1, :document-ids [2]},
-             "you" {:freq 1, :document-ids [2]}},
-            :b
-            {"at" {:freq 1, :document-ids [2]},
-             "back" {:freq 1, :document-ids [2]},
-             "you" {:freq 1, :document-ids [2]}}}}
+            {"AN0" {:f 1, :i [2]},
+             "AT" {:f 1, :i [2]},
+             "BKK" {:f 1, :i [2]},
+             "ON" {:f 1, :i [2]},
+             "Y" {:f 1, :i [2]}},
+            :b {"AT" {:f 1, :i [2]}, "BKK" {:f 1, :i [2]}, "Y" {:f 1, :i [2]}}}}
                (add-to-index-store {} maps [:a :b] :id)))))))
 
 (deftest test-intersect-sorted-seq
@@ -324,13 +372,13 @@
 (deftest test-merge-index-terms
   (testing "Merge index terms: "
     (testing "simple case"
-      (let [term1 {:freq 3 :document-ids [1 2 3]}
-            term2 {:freq 2 :document-ids [1 5]}]
-        (is (= {:freq 5 :document-ids [1 2 3 5]}
+      (let [term1 {:f 3 :i [1 2 3]}
+            term2 {:f 2 :i [1 5]}]
+        (is (= {:f 5 :i [1 2 3 5]}
                (merge-index-terms term1 term2)))
-        (is (= {:freq 3 :document-ids [1 2 3]}
+        (is (= {:f 3 :i [1 2 3]}
                (merge-index-terms term1 nil)))
-        (is (= {:freq 3 :document-ids [1 2 3]}
+        (is (= {:f 3 :i [1 2 3]}
                (merge-index-terms nil term1)))))))
 
 (deftest test-merge-index-pair
@@ -343,14 +391,14 @@
                    :b "back at you"
                    :id 2}]
             index-store (add-to-index-store {} maps [:a :b] :id)]
-        (is (= {"another" {:freq 1 :document-ids [2]}
-                "hello"   {:freq 2 :document-ids [1]}
-                "one"     {:freq 1 :document-ids [2]}
-                "there"   {:freq 1 :document-ids [1]}
-                "at"      {:freq 1 :document-ids [2]}
-                "back"    {:freq 2 :document-ids [1 2]}
-                "to"      {:freq 1 :document-ids [1]}
-                "you"     {:freq 2 :document-ids [1 2]}}
+        (is (= {"0R" {:f 1, :i [1]},
+                "AN0" {:f 1, :i [2]},
+                "AT" {:f 1, :i [2]},
+                "BKK" {:f 2, :i [1 2]},
+                "HL" {:f 2, :i [1]},
+                "ON" {:f 1, :i [2]},
+                "T" {:f 1, :i [1]},
+                "Y" {:f 2, :i [1 2]}}
                (merge-index-pair (:a index-store) (:b index-store))))))))
 
 (deftest test-merge-indexes
@@ -366,16 +414,16 @@
                    :c "amelia"
                    :id 3}]
             index-store (add-to-index-store {} maps [:a :b :c] :id)]
-        (is (= {"amelia"  {:freq 1 :document-ids [3]}
-                "harry"   {:freq 1 :document-ids [3]}
-                "another" {:freq 1 :document-ids [2]}
-                "hello"   {:freq 2 :document-ids [1]}
-                "one"     {:freq 1 :document-ids [2]}
-                "there"   {:freq 1 :document-ids [1]}
-                "at"      {:freq 1 :document-ids [2]}
-                "back"    {:freq 2 :document-ids [1 2]}
-                "to"      {:freq 1 :document-ids [1]}
-                "you"     {:freq 2 :document-ids [1 2]}}
+        (is (= {"0R" {:f 1, :i [1]},
+                "AML" {:f 1, :i [3]},
+                "AN0" {:f 1, :i [2]},
+                "AT" {:f 1, :i [2]},
+                "BKK" {:f 2, :i [1 2]},
+                "HL" {:f 2, :i [1]},
+                "HR" {:f 1, :i [3]},
+                "ON" {:f 1, :i [2]},
+                "T" {:f 1, :i [1]},
+                "Y" {:f 2, :i [1 2]}}
                (merge-indexes [(:a index-store) (:b index-store) (:c index-store)])))))))
 
 (deftest test-add-composite-index-to-index-store
@@ -391,14 +439,14 @@
                    :c "amelia"
                    :id 3}]
             index-store (add-to-index-store {} maps [:a :b :c] :id)]
-        (is (= {"amelia"  {:freq 1 :document-ids [3]}
-                "harry"   {:freq 1 :document-ids [3]}
-                "another" {:freq 1 :document-ids [2]}
-                "hello"   {:freq 2 :document-ids [1]}
-                "one"     {:freq 1 :document-ids [2]}
-                "there"   {:freq 1 :document-ids [1]}
-                "at"      {:freq 1 :document-ids [2]}
-                "back"    {:freq 2 :document-ids [1 2]}
-                "to"      {:freq 1 :document-ids [1]}
-                "you"     {:freq 2 :document-ids [1 2]}}
+        (is (= {"0R" {:f 1, :i [1]},
+                "AML" {:f 1, :i [3]},
+                "AN0" {:f 1, :i [2]},
+                "AT" {:f 1, :i [2]},
+                "BKK" {:f 2, :i [1 2]},
+                "HL" {:f 2, :i [1]},
+                "HR" {:f 1, :i [3]},
+                "ON" {:f 1, :i [2]},
+                "T" {:f 1, :i [1]},
+                "Y" {:f 2, :i [1 2]}}
                (:all (add-composite-index-to-index-store index-store :all [:a :b :c]))))))))
