@@ -3,7 +3,8 @@
             [me.raynes.fs :as fs]
             [cljcc]
             [clj-memory-meter.core :as mm]
-            [clj-fuzzy.porter :as porter]))
+            [clj-fuzzy.porter :as porter]
+            [clj-fuzzy.phonetics :as pho]))
 
 ;; ---------
 ;; Read in and validate recipes
@@ -80,11 +81,16 @@
   sorted map of frequency.
 
   We use the Porter stemmer
-  https://www.cs.odu.edu/~jbollen/IR04/readings/readings5.pdf"
+  https://www.cs.odu.edu/~jbollen/IR04/readings/readings5.pdf
+
+  We also create the metaphone (phonetic representation), so bad
+  spellings etc might work"
+
   (let [result (sorted-map)]
     (reduce (fn [acc {:keys [consumed postition token-name]}]
               (if (= token-name :word)
-                (update acc (porter/stem consumed) (fnil inc 0))
+                (-> acc
+                    (update (-> consumed porter/stem pho/metaphone) (fnil inc 0)))
                 acc))
             result matched-tokens)))
 
@@ -110,8 +116,8 @@
 
   Term is the literature name for word"
 
-  {:freq ((fnil #(+ freq-inc %) 0) freq)
-   :document-ids ((fnil #(sorted-insert % document-id) []) document-ids)})
+  {:f ((fnil #(+ freq-inc %) 0) freq)
+   :i ((fnil #(sorted-insert % document-id) []) document-ids)})
 
 (defn add-to-index [index tokens document-id]
   "Add to index, a sorted map, the linguistic tokens (updating
@@ -184,7 +190,9 @@
         :else (recur (inc i) (inc j) r)))))
 
 (defn normalise-terms [terms]
-  (map porter/stem terms))
+  (->> terms
+       (map porter/stem)
+       (map pho/metaphone)))
 
 (defn match-keys [index terms]
   "We can increasing sophistication to how search words are matched to
@@ -207,7 +215,7 @@
    Literature search is required to see what algorithms exist in this
    space.  These fns could even be passed as part of the search DSL."
   (let [term (first terms)
-        get-freq (fn [id] (get-in index-store [id index term :freq] 0))]
+        get-freq (fn [id] (get-in index-store [id index term :f] 0))]
     (sort-by get-freq #(compare %2 %1) seq)))
 
 (defn reduce-by-freq [reducer relevancy-sorter]
@@ -220,11 +228,11 @@
       (if (seq results)
         (-> (reduce reducer
                     (-> (into (sorted-map-by (fn [k1 k2]
-                                               (compare [(get-in results [k1 :freq]) k1]
-                                                        [(get-in results [k2 :freq]) k2])))
+                                               (compare [(get-in results [k1 :f]) k1]
+                                                        [(get-in results [k2 :f]) k2])))
                               results) ;; sort lowest to highest based on sort frequency
                        (vals)
-                       (->>(map :document-ids))))
+                       (->>(map :i))))
             (relevancy-sorter index-store index terms))
         []))))
 
@@ -264,12 +272,12 @@
 ;;
 
 (defn merge-index-terms [t1 t2]
-  (let [freq1 (or (:freq t1) 0)
-        freq2 (or (:freq t2) 0)
-        ids1  (or (:document-ids t1) [])
-        ids2  (or (:document-ids t2) [])]
-    {:freq (+ freq1 freq2)
-     :document-ids (union-sorted-seq ids1 ids2)}))
+  (let [freq1 (or (:f t1) 0)
+        freq2 (or (:f t2) 0)
+        ids1  (or (:i t1) [])
+        ids2  (or (:i t2) [])]
+    {:f (+ freq1 freq2)
+     :i (union-sorted-seq ids1 ids2)}))
 
 (defn merge-index-pair [xs ys]
   (reduce (fn [acc [k m]] (update acc k #(merge-index-terms % m)))
@@ -310,10 +318,10 @@
 
   ;; Read recipes
   ;; - dir location assumes unzipped dir of recipes
-  (def recipe-dir-name "/Users/matt/Downloads/recipes/")
-  (def recipe-dir (clojure.java.io/file recipe-dir-name))
-  (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
-  (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files)))
+  (do (def recipe-dir-name "/Users/matt/Downloads/recipes/")
+      (def recipe-dir (clojure.java.io/file recipe-dir-name))
+      (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
+      (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files))))
 
   ;; Build an index store
   ;; - add an index by recipe section
@@ -329,6 +337,7 @@
   ;; ~150MB 15x roughly the size of the unzipped files on disk!
   ;; The storage format is not optimized!!
   ;; The file indexes can be made much more efficient
+  ;; - some simple name key name changes reduced the size to 125MB 12x increase
   (mm/measure index-store)
 
   ;; An example search and expected output
