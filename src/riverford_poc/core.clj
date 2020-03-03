@@ -2,7 +2,9 @@
   (:require [clojure.spec.alpha :as spec]
             [me.raynes.fs :as fs]
             [cljcc]
-            [clj-memory-meter.core :as mm]))
+            [clj-memory-meter.core :as mm]
+            [clj-fuzzy.porter :as porter]
+            [clj-fuzzy.phonetics :as pho]))
 
 ;; ---------
 ;; Read in and validate recipes
@@ -78,13 +80,18 @@
   keep it very simple, ignoring position, lower-casing and returning
   sorted map of frequency.
 
-  Sophisticated things are \"stem\" words, hyphenation, names,
-  file-names, phrases etc."
+  We use the Porter stemmer
+  https://www.cs.odu.edu/~jbollen/IR04/readings/readings5.pdf
+
+  We also create the metaphone (phonetic representation), so bad
+  spellings etc might work"
+
   (let [result (sorted-map)]
     (reduce (fn [acc {:keys [consumed postition token-name]}]
               (if (= token-name :word)
-                (update acc (clojure.string/lower-case consumed) (fnil inc 0))
-                acc)) result matched-tokens)))
+                (update acc (-> consumed porter/stem pho/metaphone) (fnil inc 0))
+                acc))
+            result matched-tokens)))
 
 (defn combined-tokenizer [s]
   (-> (str s) lexical-tokenizer linguistic-tokenizer))
@@ -102,14 +109,14 @@
       (= (first s) n)  (recur (rest s) a)
       :else            (apply conj a n s))))
 
-(defn- update-index-term [{:keys [freq document-ids]} freq-inc document-id]
+(defn- update-index-term [{:keys [f i]} freq-inc document-id]
   "Update an index term by adding the frequency and adding the
   document id to a sorted set.
 
   Term is the literature name for word"
 
-  {:freq ((fnil #(+ freq-inc %) 0) freq)
-   :document-ids ((fnil #(sorted-insert % document-id) []) document-ids)})
+  {:f ((fnil #(+ freq-inc %) 0) f)
+   :i ((fnil #(sorted-insert % document-id) []) i)})
 
 (defn add-to-index [index tokens document-id]
   "Add to index, a sorted map, the linguistic tokens (updating
@@ -136,14 +143,6 @@
                             (update-in [id ::all ] #(add-to-index % tokens id)) ;; stores an :all index per document
                             ))) acc ks))
           index-store maps))
-
-(comment
-  "Simple one word searches in an index in a index-store"
-  (def custom-index-store (add-to-index-store {} recipes [::title ::ingredients] ::id ))
-  (get (::file-name custom-index-store) "brussels")
-  (get (::title custom-index-store) "brussels")
-  (get (::all custom-index-store) "brussels")
-  (get (::ingredients custom-index-store) "sauce"))
 
 ;; --------
 ;; Searches
@@ -182,7 +181,9 @@
         :else (recur (inc i) (inc j) r)))))
 
 (defn normalise-terms [terms]
-  (map clojure.string/lower-case terms))
+  (->> terms
+       (map porter/stem)
+       (map pho/metaphone)))
 
 (defn match-keys [index terms]
   "We can increasing sophistication to how search words are matched to
@@ -190,7 +191,7 @@
 
   This is alternative approach to adding words stems etc at index
   creation time"
-  (select-keys index (normalise-terms terms)))
+  (select-keys index terms))
 
 (defn relevance-identity [seq index-store index terms]
   "Does nothing returns the sequence in order"
@@ -205,7 +206,7 @@
    Literature search is required to see what algorithms exist in this
    space.  These fns could even be passed as part of the search DSL."
   (let [term (first terms)
-        get-freq (fn [id] (get-in index-store [id index term :freq] 0))]
+        get-freq (fn [id] (get-in index-store [id index term :f] 0))]
     (sort-by get-freq #(compare %2 %1) seq)))
 
 (defn reduce-by-freq [reducer relevancy-sorter]
@@ -214,16 +215,17 @@
    first selects the sorted vector of document ids before reducing
    over them."
   (fn [index-store index terms]
-    (let [results (match-keys (get index-store index) terms)]
+    (let [normalised-terms (normalise-terms terms)
+          results (match-keys (get index-store index) normalised-terms)]
       (if (seq results)
         (-> (reduce reducer
                     (-> (into (sorted-map-by (fn [k1 k2]
-                                               (compare [(get-in results [k1 :freq]) k1]
-                                                        [(get-in results [k2 :freq]) k2])))
+                                               (compare [(get-in results [k1 :f]) k1]
+                                                        [(get-in results [k2 :f]) k2])))
                               results) ;; sort lowest to highest based on sort frequency
                        (vals)
-                       (->>(map :document-ids))))
-            (relevancy-sorter index-store index terms))
+                       (->>(map :i))))
+            (relevancy-sorter index-store index normalised-terms))
         []))))
 
 ;;--------
@@ -262,12 +264,12 @@
 ;;
 
 (defn merge-index-terms [t1 t2]
-  (let [freq1 (or (:freq t1) 0)
-        freq2 (or (:freq t2) 0)
-        ids1  (or (:document-ids t1) [])
-        ids2  (or (:document-ids t2) [])]
-    {:freq (+ freq1 freq2)
-     :document-ids (union-sorted-seq ids1 ids2)}))
+  (let [freq1 (or (:f t1) 0)
+        freq2 (or (:f t2) 0)
+        ids1  (or (:i t1) [])
+        ids2  (or (:i t2) [])]
+    {:f (+ freq1 freq2)
+     :i (union-sorted-seq ids1 ids2)}))
 
 (defn merge-index-pair [xs ys]
   (reduce (fn [acc [k m]] (update acc k #(merge-index-terms % m)))
@@ -308,15 +310,15 @@
 
   ;; Read recipes
   ;; - dir location assumes unzipped dir of recipes
-  (def recipe-dir-name "/Users/matt/Downloads/recipes/")
-  (def recipe-dir (clojure.java.io/file recipe-dir-name))
-  (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
-  (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files)))
+  (do (def recipe-dir-name "/Users/matt/Downloads/recipes/")
+      (def recipe-dir (clojure.java.io/file recipe-dir-name))
+      (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
+      (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files))))
 
   ;; Build an index store
   ;; - add an index by recipe section
   ;; - this takes a little whilst as it's search that's optimised not ingestion
-  ;; - on my machine it takes ~50 seconds
+  ;; - on my machine it takes ~60 seconds
   (def index-store (wrap-time "Building index-store..."
                               (do (reset! id 0)
                                   (reset! ids [])
@@ -327,10 +329,13 @@
   ;; ~150MB 15x roughly the size of the unzipped files on disk!
   ;; The storage format is not optimized!!
   ;; The file indexes can be made much more efficient
+  ;; - some simple name key name changes reduced the size to 125MB 12x increase
   (mm/measure index-store)
 
   ;; An example search and expected output
   (d (intersect-rel index-store ::all ["riverford"]))
+  ;; This example may not reflect the current implementation: it's
+  ;; to show what to expect in the output.
   ;; 33 results:
   ;; -  sweet-chilli-chicken-wings-with-slaw.txt
   ;; -  lamb-and-mint-burgers-tzatziki-greek-sal.txt
@@ -348,11 +353,16 @@
   ;; To restrict to a recipe section, select the appropriate index.
   ;; - notice the difference between the relevance and non-relevance sorted results.
   (d (intersect index-store ::ingredients ["broccoli"]))
+
+  ;; Highlight all the different accepted spellings supported.
   (d (intersect-rel index-store ::ingredients ["broccoli"]))
+  (d (intersect-rel index-store ::ingredients ["brocoli"]))
+  (d (intersect-rel index-store ::ingredients ["brokolee"]))
 
   (d (intersect index-store ::ingredients ["chicken"]))
   (d (intersect-rel index-store ::ingredients ["chicken"]))
   (d (intersect-rel index-store ::ingredients ["spinach" "chicken" "garlic"]))
+  (d (intersect-rel index-store ::ingredients ["spinitch" "chickon" "garlik"]))
 
   ;; To search everywhere in the recipe use the ::all index
   ;; Use intersect and a vector of terms to do an AND
