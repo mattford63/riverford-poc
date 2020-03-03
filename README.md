@@ -12,7 +12,7 @@ Given the time constraints to do this the focus has been on a solid
 foundation from which to further develop out the search solution.
 
 The essential requirement of speed (<10ms) and simple relevance has been
-focused on. Sophisticated search techniques and recipe management are
+focused on. ~~Sophisticated search techniques~~ and recipe management are
 out of scope for now.
 
 The very first pass used
@@ -47,8 +47,12 @@ single global :all index to search everything.  All these indexes
 allow relevancy based search at the expense of large increase in
 index-store size.
 
-The speed of the search comes from using ordered vectors as the data
-structure for the document ids in the reverse index. A class of
+A stemming algorithm (porter) and phonetic library (metaphone) is used
+in the linguistic tokenizer to allow searches to work over
+mis-spellings and changed word endings.
+
+The speed of the search comes from using ordered vectors as the
+data structure for the document ids in the reverse index. A class of
 merge-algorithms that rely on the fact that vectors are ordered offer
 more speed up when performing operations.  The computational expense
 of the initial import operation ~50s is the price paid up front for
@@ -69,7 +73,7 @@ The PoC is currently managed by the REPL. An example section at the
 end of `core.clj` can be used to explore the functionality.  Just
 remember to unzip and change the directory location appropriately.
 
-- https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L275
+- https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L308
 
 ## Issues
 
@@ -78,7 +82,7 @@ remember to unzip and change the directory location appropriately.
   list of the document ids used in that index.
 - The storage format is very in-efficient now that each document is added
   as in index in the store.  The memory consumption of the index-store
-  is around x15 of the size of the on-disk space.
+  is around x12 of the size of the on-disk space.
 
 
 ## Future work
@@ -94,13 +98,13 @@ remember to unzip and change the directory location appropriately.
   and
   [here](https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L174).
   This would be a good way to make the search seem way more
-  sophisticated.~~.  This branch
-  [stemming](https://github.com/mattford63/riverford-poc/tree/stemming)
+  sophisticated.~~.
   integrates Porter Stemming (but is not merged as it requires updating all the tests).
 - ~~At present the individual document frequencies are lost when
   combined. A more sophisticated reverse index data structure would
   allow this data to be kept - this would open up the door to
   relevancy scoring based on term frequency.~~ DONE
+- ~~Add support for mis-spellings etc~~
 - The tokenizer used records word position, by extending the reverse
   index data structure even further we could capture this also.
 - Think about whether the index-store should be atomic.
