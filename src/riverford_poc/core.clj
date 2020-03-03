@@ -369,9 +369,9 @@
 
   ;; The most taxing searches will involve intersections of common
   ;; words across the ::all index
-  ;; - on average these all seem to be <1ms
-  (d (intersect index-store :all ["i" "and" "the" "if" "or" "a"]))
-  (d (union index-store :all ["i" "and" "the" "if" "or" "a"]))
+  ;; - on average these all seem to be <5ms
+  (d (intersect index-store ::all ["i" "and" "the" "if" "or" "a"]))
+  (d (union index-store ::all ["i" "and" "the" "if" "or" "a"]))
 
   ;; Complex queries can be written
   ;; We want all recipes that have cheese as an ingredient but not

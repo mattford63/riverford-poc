@@ -1,4 +1,4 @@
-# riverford-poc
+# Riverford PoC
 
 - See the design brief [here](https://github.com/riverford/recipe-search-tech-test).
 
@@ -22,9 +22,9 @@ problem space (see
 However, after talking with RiverFord a from-scratch approach was
 required.
 
-Inverted indexes are excellent for building search engines
-over. _"Introduction to Information Retrieval"_ by Manning, Raghavan
-and Schutze provides a very good overview of the process and
+Inverted indexes are excellent for building text search
+engines. _"Introduction to Information Retrieval"_ by Manning,
+Raghavan and Schutze provides a very good overview of the process and
 efficiency algorithms.  The code implements the methods and algorithms
 in the book outlined
 [here.](https://nlp.stanford.edu/IR-book/html/htmledition/a-first-take-at-building-an-inverted-index-1.html)
@@ -55,7 +55,8 @@ of the initial import operation ~50s is the price paid up front for
 sub <5ms search later.
 
 A DSL consisting of `intersect`, `union` and a limited `not` provide
-search operations over the index-store.
+search operations over the index-store (and relevance based versions
+of the same operators).
 
 ## Usage
 
@@ -85,12 +86,17 @@ remember to unzip and change the directory location appropriately.
 - Use a more compact form of index for individual documents.
 - Migrate away from PoC code e.g. namespace fuctions appropriately,
   split tests etc.
-- It should be relatively quick to add one of the these clojure
-  [fuzzy stemmer](https://yomguithereal.github.io/clj-fuzzy/clojure.html) algorithms to
+- ~~It should be relatively quick to add one of the these clojure
+  [fuzzy
+  stemmer](https://yomguithereal.github.io/clj-fuzzy/clojure.html)
+  algorithms to
   [here](https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L76)
   and
   [here](https://github.com/mattford63/riverford-poc/blob/master/src/riverford_poc/core.clj#L174).
-  This would be a good way to make the search seem way more sophisticated.
+  This would be a good way to make the search seem way more
+  sophisticated.~~.  This branch
+  [stemming](https://github.com/mattford63/riverford-poc/tree/stemming)
+  integrates Porter Stemming (but is not merged as it requires updating all the tests).
 - ~~At present the individual document frequencies are lost when
   combined. A more sophisticated reverse index data structure would
   allow this data to be kept - this would open up the door to
