@@ -450,3 +450,111 @@
                 "T" {:f 1, :i [1]},
                 "Y" {:f 2, :i [1 2]}}
                (:all (add-composite-index-to-index-store index-store :all [:a :b :c]))))))))
+
+
+(deftest test-merge-index-stores
+  (testing "Merge two index stores:"
+    (testing "simple case"
+      (let [maps1 [{:a "hello there"
+                    :b "hello back to you"
+                    :id 1}
+                   {:a "Another one!"
+                    :b "back at you"
+                    :id 2}
+                   {:a "harry"
+                    :c "amelia"
+                    :id 3}]
+            maps2 [{:a "hello there"
+                    :b "hello back to you"
+                    :id 4}
+                   {:a "Another one!"
+                    :b "back at you"
+                    :id 5}
+                   {:a "harry"
+                    :c "amelia"
+                    :id 6}]
+            index-store1 (add-to-index-store {} maps1 [:a :b :c] :id)
+            index-store2 (add-to-index-store {} maps2 [:a :b :c] :id)]
+        (is (= {1
+           {:a {"0R" {:f 1, :i [1]}, "HL" {:f 1, :i [1]}},
+            :riverford-poc.core/all
+            {"0R" {:f 1, :i [1]},
+             "BKK" {:f 1, :i [1]},
+             "HL" {:f 2, :i [1]},
+             "T" {:f 1, :i [1]},
+             "Y" {:f 1, :i [1]}},
+            :b
+            {"BKK" {:f 1, :i [1]},
+             "HL" {:f 1, :i [1]},
+             "T" {:f 1, :i [1]},
+             "Y" {:f 1, :i [1]}},
+            :c {}},
+           4
+           {:a {"0R" {:f 1, :i [4]}, "HL" {:f 1, :i [4]}},
+            :riverford-poc.core/all
+            {"0R" {:f 1, :i [4]},
+             "BKK" {:f 1, :i [4]},
+             "HL" {:f 2, :i [4]},
+             "T" {:f 1, :i [4]},
+             "Y" {:f 1, :i [4]}},
+            :b
+            {"BKK" {:f 1, :i [4]},
+             "HL" {:f 1, :i [4]},
+             "T" {:f 1, :i [4]},
+             "Y" {:f 1, :i [4]}},
+            :c {}},
+           6
+           {:a {"HR" {:f 1, :i [6]}},
+            :riverford-poc.core/all {"AML" {:f 1, :i [6]}, "HR" {:f 1, :i [6]}},
+            :b {},
+            :c {"AML" {:f 1, :i [6]}}},
+           :c {"AML" {:f 2, :i [3 6]}},
+           3
+           {:a {"HR" {:f 1, :i [3]}},
+            :riverford-poc.core/all {"AML" {:f 1, :i [3]}, "HR" {:f 1, :i [3]}},
+            :b {},
+            :c {"AML" {:f 1, :i [3]}}},
+           2
+           {:a {"AN0" {:f 1, :i [2]}, "ON" {:f 1, :i [2]}},
+            :riverford-poc.core/all
+            {"AN0" {:f 1, :i [2]},
+             "AT" {:f 1, :i [2]},
+             "BKK" {:f 1, :i [2]},
+             "ON" {:f 1, :i [2]},
+             "Y" {:f 1, :i [2]}},
+            :b {"AT" {:f 1, :i [2]}, "BKK" {:f 1, :i [2]}, "Y" {:f 1, :i [2]}},
+            :c {}},
+           :b
+           {"AT" {:f 2, :i [2 5]},
+            "BKK" {:f 4, :i [1 2 4 5]},
+            "HL" {:f 2, :i [1 4]},
+            "T" {:f 2, :i [1 4]},
+            "Y" {:f 4, :i [1 2 4 5]}},
+           5
+           {:a {"AN0" {:f 1, :i [5]}, "ON" {:f 1, :i [5]}},
+            :riverford-poc.core/all
+            {"AN0" {:f 1, :i [5]},
+             "AT" {:f 1, :i [5]},
+             "BKK" {:f 1, :i [5]},
+             "ON" {:f 1, :i [5]},
+             "Y" {:f 1, :i [5]}},
+            :b {"AT" {:f 1, :i [5]}, "BKK" {:f 1, :i [5]}, "Y" {:f 1, :i [5]}},
+            :c {}},
+           :riverford-poc.core/all
+           {"0R" {:f 2, :i [1 4]},
+            "AML" {:f 2, :i [3 6]},
+            "AN0" {:f 2, :i [2 5]},
+            "AT" {:f 2, :i [2 5]},
+            "BKK" {:f 4, :i [1 2 4 5]},
+            "HL" {:f 4, :i [1 4]},
+            "HR" {:f 2, :i [3 6]},
+            "ON" {:f 2, :i [2 5]},
+            "T" {:f 2, :i [1 4]},
+            "Y" {:f 4, :i [1 2 4 5]}},
+           :a
+           {"0R" {:f 2, :i [1 4]},
+            "AN0" {:f 2, :i [2 5]},
+            "HL" {:f 2, :i [1 4]},
+            "HR" {:f 2, :i [3 6]},
+            "ON" {:f 2, :i [2 5]}}}
+               (merge-index-stores index-store1 index-store2)))))))

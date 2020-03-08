@@ -4,7 +4,8 @@
             [cljcc]
             [clj-memory-meter.core :as mm]
             [clj-fuzzy.porter :as porter]
-            [clj-fuzzy.phonetics :as pho]))
+            [clj-fuzzy.phonetics :as pho]
+            [clojure.core.reducers :as r]))
 
 ;; ---------
 ;; Read in and validate recipes
@@ -96,54 +97,6 @@
 (defn combined-tokenizer [s]
   (-> (str s) lexical-tokenizer linguistic-tokenizer))
 
-;; ---------
-;; Reverse Index
-;;
-
-(defn sorted-insert [sorted-seq n]
-  (loop [s sorted-seq, a []]
-    (cond
-      (nil? n)         s
-      (empty? s)       (conj a n)
-      (< (first s) n)  (recur (rest s) (conj a (first s)))
-      (= (first s) n)  (recur (rest s) a)
-      :else            (apply conj a n s))))
-
-(defn- update-index-term [{:keys [f i]} freq-inc document-id]
-  "Update an index term by adding the frequency and adding the
-  document id to a sorted set.
-
-  Term is the literature name for word"
-
-  {:f ((fnil #(+ freq-inc %) 0) f)
-   :i ((fnil #(sorted-insert % document-id) []) i)})
-
-(defn add-to-index [index tokens document-id]
-  "Add to index, a sorted map, the linguistic tokens (updating
-  frequencies) resulting from parsing s and registering the document
-  id"
-  (reduce (fn [acc [token freq]]
-            (update acc token #(update-index-term % freq document-id)))
-          (or index (sorted-map)) tokens))
-
-(defn add-to-index-store [index-store maps ks id-fn]
-  "Build an index store (collection of indexes) from a sequence of
-  maps with the specified keys as indexes. Used id-fn to get the doc
-  id from the map.
-
-  Now also stores an index per document added"
-  (reduce (fn [acc m]
-            (reduce (fn [a k]
-                      (let [tokens (combined-tokenizer (k m))
-                            id (id-fn m)]
-                        (-> a
-                            (update k #(add-to-index % tokens id)) ;; adds to section indexes
-                            (update ::all #(add-to-index % tokens id)) ;; adds to a global :all index
-                            (assoc-in [id k] (add-to-index nil tokens id)) ;; stores an index per document per section
-                            (update-in [id ::all ] #(add-to-index % tokens id)) ;; stores an :all index per document
-                            ))) acc ks))
-          index-store maps))
-
 ;; --------
 ;; Searches
 ;;
@@ -197,6 +150,9 @@
   "Does nothing returns the sequence in order"
   seq)
 
+(defn get-freq [index-store index term id]
+  (get-in index-store [id index term :f] 0))
+
 (defn relevance-intersect-1st-term-freq [seq index-store index terms]
   "Uses the first term in the intersection and orders based on it's frequency
 
@@ -205,9 +161,8 @@
 
    Literature search is required to see what algorithms exist in this
    space.  These fns could even be passed as part of the search DSL."
-  (let [term (first terms)
-        get-freq (fn [id] (get-in index-store [id index term :f] 0))]
-    (sort-by get-freq #(compare %2 %1) seq)))
+  (let [term (first terms)]
+    (sort-by (partial get-freq index-store index term) #(compare %2 %1) seq)))
 
 (defn reduce-by-freq [reducer relevancy-sorter]
   "This function for efficiency sorts the results on frequency: lowest
@@ -278,8 +233,72 @@
 (defn merge-indexes [indexes]
   (reduce merge-index-pair indexes))
 
+(defn merge-index-stores [is1 is2]
+  (let [ks (distinct (concat (keys is1) (keys is2) [:all]))]
+    (reduce (fn [acc k]
+              (let [is1k (get is1 k)
+                    is2k (get is2 k)]
+                (cond
+                  (and is1k is2k) (assoc acc k (merge-index-pair is1k is2k))
+                  is1k (assoc acc k is1k)
+                  is2k (assoc acc k is2k)
+                  :else acc
+                  ))) {} ks)))
+
 (defn add-composite-index-to-index-store [index-store name indexes]
   (assoc index-store name (merge-indexes (-> (select-keys index-store indexes) vals))))
+
+;; ---------
+;; Reverse Index
+;;
+
+(defn sorted-insert [sorted-seq n]
+  (loop [s sorted-seq, a []]
+    (cond
+      (nil? n)         s
+      (empty? s)       (conj a n)
+      (< (first s) n)  (recur (rest s) (conj a (first s)))
+      (= (first s) n)  (recur (rest s) a)
+      :else            (apply conj a n s))))
+
+(defn- update-index-term [{:keys [f i]} freq-inc document-id]
+  "Update an index term by adding the frequency and adding the
+  document id to a sorted set.
+
+  Term is the literature name for word"
+
+  {:f ((fnil #(+ freq-inc %) 0) f)
+   :i ((fnil #(sorted-insert % document-id) []) i)})
+
+(defn add-to-index [index tokens document-id]
+  "Add to index, a sorted map, the linguistic tokens (updating
+  frequencies) resulting from parsing s and registering the document
+  id"
+  (reduce (fn [acc [token freq]]
+            (update acc token #(update-index-term % freq document-id)))
+          (or index (sorted-map)) tokens))
+
+(defn add-to-index-store [index-store maps ks id-fn]
+  "Build an index store (collection of indexes) from a sequence of
+  maps with the specified keys as indexes. Used id-fn to get the doc
+  id from the map.
+
+  Now also stores an index per document added"
+  (let [rmaps (into [] maps)
+        n (int (Math/ceil (/ (count rmaps) (.. Runtime getRuntime availableProcessors))))]
+    (r/fold n
+     (r/monoid merge-index-stores (constantly index-store))
+     (fn [acc m]
+       (r/reduce (fn [a k]
+                   (let [tokens (combined-tokenizer (k m))
+                         id (id-fn m)]
+                     (-> a
+                         (update k #(add-to-index % tokens id)) ;; adds to section indexes
+                         (update ::all #(add-to-index % tokens id)) ;; adds to a global :all index
+                         (assoc-in [id k] (add-to-index nil tokens id)) ;; stores an index per document per section
+                         (update-in [id ::all ] #(add-to-index % tokens id)) ;; stores an :all index per document
+                         ))) acc ks))
+     rmaps)))
 
 ;; -------
 ;; REPL helper functions
@@ -293,6 +312,14 @@
   (let [c (count results)]
     (println "\n" c "results:\n- "
              (clojure.string/join "\n-  " (take n (map #(get @id->file %) results)))
+             (if (> c n) "..." )
+             "\n")))
+
+(defn display-extra [n results index-store index terms]
+  (let [c (count results)
+        normalised-term (first (normalise-terms terms))]
+    (println "\n" c "results:\n- "
+             (clojure.string/join "\n-  " (take n (map (juxt #(get @id->file %) #(get-freq index-store index normalised-term %)) results )))
              (if (> c n) "..." )
              "\n")))
 
@@ -310,7 +337,7 @@
 
   ;; Read recipes
   ;; - dir location assumes unzipped dir of recipes
-  (do (def recipe-dir-name "/Users/matt/Downloads/recipes/")
+  (do (def recipe-dir-name "/home/matt/Downloads/recipes/")
       (def recipe-dir (clojure.java.io/file recipe-dir-name))
       (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
       (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files))))
@@ -353,6 +380,8 @@
   ;; To restrict to a recipe section, select the appropriate index.
   ;; - notice the difference between the relevance and non-relevance sorted results.
   (d (intersect index-store ::ingredients ["broccoli"]))
+  (display-extra 10 (intersect-rel index-store ::ingredients ["broccoli"]) index-store ::ingredients ["broccoli"])
+  (d (intersect-rel index-store ::ingredients ["broccoli"]))
 
   ;; Highlight all the different accepted spellings supported.
   (d (intersect-rel index-store ::ingredients ["broccoli"]))
