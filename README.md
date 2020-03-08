@@ -109,7 +109,8 @@ remember to unzip and change the directory location appropriately.
   index data structure even further we could capture this also.
 - Think about whether the index-store should be atomic.
 - ~~Think about a mechanism of updating the all index on other index updates.~~ DONE
-- Parallelise the input (possibly transducers) but is it worth it?
+- ~~Parallelise the input (possibly transducers) but is it worth it?~~
+  Update: on my desktop the import is now ~8s
 
 
 ## License
