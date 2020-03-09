@@ -49,13 +49,14 @@
 (def id->file (atom {}))
 
 (defn recipe-seq-to-map [recipe-seq]
-  "We could make this parallel but not worth it for now"
-  (let [recipe-map (into {::id (swap! id inc)} (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
+  (let [id (swap! id inc)
+        recipe-map (into {::id id}
+                         (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
     (if (not (spec/valid? ::recipe recipe-map))
       (do (spec/explain ::recipe recipe-map)
           nil)
-      (do (swap! ids conj @id)
-          (swap! id->file assoc @id (::file-name recipe-map))
+      (do (swap! ids conj id)
+          (swap! id->file assoc id (::file-name recipe-map))
           recipe-map))))
 
 (defn read-recipe [recipe-file]
@@ -63,6 +64,17 @@
     (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)]
                              (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
       (recipe-seq-to-map recipe-seq))))
+
+(defn read-recipes [recipe-files]
+  (let [n (int (Math/ceil (/ (count recipe-files) (.. Runtime getRuntime availableProcessors))))]
+    (reset! id 0)
+    (reset! ids [])
+    (reset! id->file {})
+    (into [] (r/fold
+              n
+              (r/monoid r/cat (constantly []))
+              ((map read-recipe) conj)
+              (into [] recipe-files)))))
 
 ;; --------
 ;; Tokenizer
@@ -340,16 +352,14 @@
   (do (def recipe-dir-name "/home/matt/Downloads/recipes/")
       (def recipe-dir (clojure.java.io/file recipe-dir-name))
       (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
-      (def recipes (wrap-time "Reading recipes (lazy)..." (map read-recipe recipe-files))))
+      (def recipes (wrap-time "Reading files..." (read-recipes recipe-files))))
 
   ;; Build an index store
   ;; - add an index by recipe section
   ;; - this takes a little whilst as it's search that's optimised not ingestion
   ;; - on my machine it takes ~60 seconds
   (def index-store (wrap-time "Building index-store..."
-                              (do (reset! id 0)
-                                  (reset! ids [])
-                                  (reset! id->file {})
+                              (do
                                   (add-to-index-store {} recipes [::title ::introduction ::method ::ingredients] ::id))))
 
   ;; How big is the index-store?
