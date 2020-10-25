@@ -349,10 +349,10 @@
 
   ;; Read recipes
   ;; - dir location assumes unzipped dir of recipes
-  (do (def recipe-dir-name "/home/matt/Downloads/recipes/")
+  (do (def recipe-dir-name "/workspaces/clojure/riverford-poc/recipes/")
       (def recipe-dir (clojure.java.io/file recipe-dir-name))
       (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
-      (def recipes (wrap-time "Reading files..." (read-recipes recipe-files))))
+      (def recipes (wrap-time "Reading files..." (read-recipes recipe-files)))) 
 
   ;; Build an index store
   ;; - add an index by recipe section
