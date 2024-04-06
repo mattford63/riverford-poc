@@ -1,33 +1,37 @@
 (ns riverford-poc.core
-  (:require [clojure.spec.alpha :as spec]
-            [me.raynes.fs :as fs]
-            [cljcc]
-            [clj-memory-meter.core :as mm]
-            [clj-fuzzy.porter :as porter]
-            [clj-fuzzy.phonetics :as pho]
-            [clojure.core.reducers :as r]))
+  (:require
+   [clj-fuzzy.phonetics :as pho]
+   [clj-fuzzy.porter :as porter]
+   [clj-memory-meter.core :as mm]
+   [cljcc]
+   [clojure.core.reducers :as r]
+   [clojure.java.io :as io]
+   [clojure.spec.alpha :as spec]
+   [clojure.string :as string]
+   [me.raynes.fs :as fs]))
 
 ;; ---------
 ;; Read in and validate recipes
 ;;
 
-(defn split-by-short [pred coll]
+(defn split-by-short
   "Splits a sequence by predicate but always splits on predicate success"
+  [pred coll]
   (lazy-seq
-   (when-let [s (seq coll)]
+   (when-let [_s (seq coll)]
      (let [[x & xs] coll
-           !pred (complement pred)]
-       (let [skip (take-while !pred xs)
-             others (drop-while !pred xs)]
-         (cons (cons x skip)
-               (split-by-short pred others)))))))
+           !pred (complement pred)
+	   skip (take-while !pred xs)
+	   others (drop-while !pred xs)]
+       (cons (cons x skip)
+             (split-by-short pred others))))))
 
 (defn keyword+ [s] (keyword "riverford-poc.core" s))
 
 (defn normalised-keyword [s]
   (-> s
-      clojure.string/lower-case
-      (clojure.string/replace ":" "")
+      string/lower-case
+      (string/replace ":" "")
       keyword+))
 
 (spec/def ::id int?)
@@ -51,7 +55,7 @@
 (defn recipe-seq-to-map [recipe-seq]
   (let [id (swap! id inc)
         recipe-map (into {::id id}
-                         (map (fn [[x & y]] [(normalised-keyword x) (clojure.string/join "\n" y)]) (split-recipe recipe-seq)))]
+                         (map (fn [[x & y]] [(normalised-keyword x) (string/join "\n" y)]) (split-recipe recipe-seq)))]
     (if (not (spec/valid? ::recipe recipe-map))
       (do (spec/explain ::recipe recipe-map)
           nil)
@@ -60,7 +64,7 @@
           recipe-map))))
 
 (defn read-recipe [recipe-file]
-  (with-open [rdr (clojure.java.io/reader recipe-file)]
+  (with-open [rdr (io/reader recipe-file)]
     (let [recipe-seq (concat ["File-Name:" (fs/base-name recipe-file)]
                              (conj (line-seq rdr) "Title:"))] ;; add Title and File-Name to seq
       (recipe-seq-to-map recipe-seq))))
@@ -88,8 +92,8 @@
   "Tokenize a string"
   (cljcc/make-lexer tokens))
 
-(defn linguistic-tokenizer [matched-tokens]
-  "This is where increased sophistication can come in but for now we
+(defn linguistic-tokenizer
+   "This is where increased sophistication can come in but for now we
   keep it very simple, ignoring position, lower-casing and returning
   sorted map of frequency.
 
@@ -97,10 +101,10 @@
   https://www.cs.odu.edu/~jbollen/IR04/readings/readings5.pdf
 
   We also create the metaphone (phonetic representation), so bad
-  spellings etc might work"
-
+   spellings etc might work"
+  [matched-tokens]
   (let [result (sorted-map)]
-    (reduce (fn [acc {:keys [consumed postition token-name]}]
+    (reduce (fn [acc {:keys [consumed _postition token-name]}]
               (if (= token-name :word)
                 (update acc (-> consumed porter/stem pho/metaphone) (fnil inc 0))
                 acc))
@@ -150,37 +154,41 @@
        (map porter/stem)
        (map pho/metaphone)))
 
-(defn match-keys [index terms]
+(defn match-keys 
   "We can increasing sophistication to how search words are matched to
   index keys here.
 
   This is alternative approach to adding words stems etc at index
   creation time"
+  [index terms]
   (select-keys index terms))
 
-(defn relevance-identity [seq index-store index terms]
+(defn relevance-identity
   "Does nothing returns the sequence in order"
+  [seq _index-store _index _terms]
   seq)
 
 (defn get-freq [index-store index term id]
   (get-in index-store [id index term :f] 0))
 
-(defn relevance-intersect-1st-term-freq [seq index-store index terms]
+(defn relevance-intersect-1st-term-freq 
   "Uses the first term in the intersection and orders based on it's frequency
 
    This is a very naive implementation of relevance, used just to show
    off the capability we have.
 
    Literature search is required to see what algorithms exist in this
-   space.  These fns could even be passed as part of the search DSL."
+  space.  These fns could even be passed as part of the search DSL."
+  [seq index-store index terms]
   (let [term (first terms)]
     (sort-by (partial get-freq index-store index term) #(compare %2 %1) seq)))
 
-(defn reduce-by-freq [reducer relevancy-sorter]
+(defn reduce-by-freq 
   "This function for efficiency sorts the results on frequency: lowest
    frequency first so the least work is done on reduce operations.  It
    first selects the sorted vector of document ids before reducing
-   over them."
+  over them."
+  [reducer relevancy-sorter]
   (fn [index-store index terms]
     (let [normalised-terms (normalise-terms terms)
           results (match-keys (get index-store index) normalised-terms)]
@@ -273,29 +281,31 @@
       (= (first s) n)  (recur (rest s) a)
       :else            (apply conj a n s))))
 
-(defn- update-index-term [{:keys [f i]} freq-inc document-id]
+(defn- update-index-term
   "Update an index term by adding the frequency and adding the
   document id to a sorted set.
 
   Term is the literature name for word"
-
+  [{:keys [f i]} freq-inc document-id]
   {:f ((fnil #(+ freq-inc %) 0) f)
    :i ((fnil #(sorted-insert % document-id) []) i)})
 
-(defn add-to-index [index tokens document-id]
+(defn add-to-index 
   "Add to index, a sorted map, the linguistic tokens (updating
   frequencies) resulting from parsing s and registering the document
   id"
+  [index tokens document-id]
   (reduce (fn [acc [token freq]]
             (update acc token #(update-index-term % freq document-id)))
           (or index (sorted-map)) tokens))
 
-(defn add-to-index-store [index-store maps ks id-fn]
+(defn add-to-index-store 
   "Build an index store (collection of indexes) from a sequence of
   maps with the specified keys as indexes. Used id-fn to get the doc
   id from the map.
 
   Now also stores an index per document added"
+  [index-store maps ks id-fn]
   (let [rmaps (into [] maps)
         n (int (Math/ceil (/ (count rmaps) (.. Runtime getRuntime availableProcessors))))]
     (r/fold n
@@ -323,17 +333,17 @@
 (defn display [n results]
   (let [c (count results)]
     (println "\n" c "results:\n- "
-             (clojure.string/join "\n-  " (take n (map #(get @id->file %) results)))
-             (if (> c n) "..." )
-             "\n")))
+             (string/join "\n-  " (take n (map #(get @id->file %) results)))
+             (if (> c n) "..." 
+               "\n"))))
 
 (defn display-extra [n results index-store index terms]
   (let [c (count results)
         normalised-term (first (normalise-terms terms))]
     (println "\n" c "results:\n- "
-             (clojure.string/join "\n-  " (take n (map (juxt #(get @id->file %) #(get-freq index-store index normalised-term %)) results )))
-             (if (> c n) "..." )
-             "\n")))
+             (string/join "\n-  " (take n (map (juxt #(get @id->file %) #(get-freq index-store index normalised-term %)) results )))
+             (if (> c n) "..." 
+               "\n"))))
 
 (def d10 (partial display 10))
 
@@ -349,8 +359,8 @@
 
   ;; Read recipes
   ;; - dir location assumes unzipped dir of recipes
-  (do (def recipe-dir-name "/workspaces/clojure/riverford-poc/recipes/")
-      (def recipe-dir (clojure.java.io/file recipe-dir-name))
+  (do (def recipe-dir-name "/recipes/")
+      (def recipe-dir (io/file recipe-dir-name))
       (def recipe-files (filter #(.isFile %) (file-seq recipe-dir)))
       (def recipes (wrap-time "Reading files..." (read-recipes recipe-files)))) 
 
@@ -359,8 +369,7 @@
   ;; - this takes a little whilst as it's search that's optimised not ingestion
   ;; - on my machine it takes ~60 seconds
   (def index-store (wrap-time "Building index-store..."
-                              (do
-                                  (add-to-index-store {} recipes [::title ::introduction ::method ::ingredients] ::id))))
+                              (add-to-index-store {} recipes [::title ::introduction ::method ::ingredients] ::id)))
 
   ;; How big is the index-store?
   ;; ~150MB 15x roughly the size of the unzipped files on disk!
@@ -438,5 +447,5 @@
   ;; Add a new file to the store, creates a new index-store.
   ;; - maybe index-store should be atomic
 
-  (add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::title ::introduction ::method ::ingredients] ::id)
+  ;;(add-to-index-store index-store [(read-recipe JAVA_FILE_OBJECT)] [::title ::introduction ::method ::ingredients] ::id)
   )
